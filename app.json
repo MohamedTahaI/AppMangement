@@ -1,21 +1,19 @@
 {
   "expo": {
-    "name": "my-app",
-    "slug": "my-app",
+    "name": "مدير العمارة",
+    "slug": "building-manager",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "myapp",
-    "userInterfaceStyle": "automatic",
-    "ios": {
-      "icon": "./assets/expo.icon"
-    },
+    "icon": "./assets/images/building-icon.png",
+    "scheme": "buildingmanager",
+    "userInterfaceStyle": "light",
     "android": {
+      "package": "com.myname.buildingmanager",
+      "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#075985",
+        "foregroundImage": "./assets/images/building-adaptive-foreground.png",
+        "monochromeImage": "./assets/images/building-monochrome.png"
       },
       "predictiveBackGestureEnabled": false
     },
@@ -28,11 +26,13 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "backgroundColor": "#F4F7FA",
+          "image": "./assets/images/building-splash.png",
+          "imageWidth": 180
         }
-      ]
+      ],
+      "expo-sqlite",
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true,

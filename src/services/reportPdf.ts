@@ -10,7 +10,7 @@ function escapeHtml(value: string | number): string {
 }
 
 function money(value: number): string {
-  return `${value.toLocaleString('en-US', { maximumFractionDigits: 2 })} ج`;
+  return `\u200E${value.toLocaleString('en-US', { maximumFractionDigits: 2 })} ج\u200E`;
 }
 
 type PdfCell = string | number | { text: string; color: string };

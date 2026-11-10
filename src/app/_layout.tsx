@@ -1,5 +1,5 @@
 import { AppText } from '@/components/ui/AppText';
-import { Stack, type ErrorBoundaryProps } from 'expo-router';
+import { Stack, useRouter, type ErrorBoundaryProps } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { I18nManager, Platform, Pressable, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -13,6 +13,7 @@ import {
   Cairo_700Bold,
   Cairo_800ExtraBold,
 } from '@expo-google-fonts/cairo';
+import * as Notifications from 'expo-notifications';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
@@ -23,6 +24,7 @@ import { initializeDatabase } from '@/db/schema';
 import { isAppPinEnabled, verifyAppPin } from '@/services/appPin';
 import { ensureMonthlyCharges } from '@/services/billing';
 import { arabicErrorMessage } from '@/services/errors';
+import { isBackupReminderResponse, scheduleBackupReminders } from '@/services/reminders';
 import { startAutoSync } from '@/services/sync';
 import { useMotion } from '@/hooks/useMotion';
 import { theme } from '@/theme';
@@ -45,6 +47,7 @@ if (Platform.OS !== 'web') {
 
 export default function RootLayout() {
   const motion = useMotion();
+  const router = useRouter();
   const [fontsLoaded, fontError] = useFonts({
     Cairo_400Regular,
     Cairo_600SemiBold,
@@ -71,6 +74,19 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
+    const openBackup = (response: Notifications.NotificationResponse) => {
+      if (isBackupReminderResponse(response)) router.push('/backup');
+    };
+    const subscription = Notifications.addNotificationResponseReceivedListener(openBackup);
+    void Notifications.getLastNotificationResponseAsync()
+      .then((response) => {
+        if (response) openBackup(response);
+      })
+      .catch(() => undefined);
+    return () => subscription.remove();
+  }, [router]);
+
+  useEffect(() => {
     if ((!fontsLoaded && !fontError) || initialized.current) return;
     initialized.current = true;
     let active = true;
@@ -82,6 +98,7 @@ export default function RootLayout() {
         await ensureMonthlyCharges();
         setPinLocked(await isAppPinEnabled());
         stopAutoSync = startAutoSync();
+        void scheduleBackupReminders().catch(() => undefined);
         if (active) {
           setReady(true);
           await SplashScreen.hideAsync();
@@ -196,6 +213,7 @@ export default function RootLayout() {
               <Stack.Screen name="special-details/[id]" />
               <Stack.Screen name="overdue" />
               <Stack.Screen name="export-backup" />
+              <Stack.Screen name="backup" />
               <Stack.Screen name="sync" />
               <Stack.Screen name="app-pin" />
               {__DEV__ ? <Stack.Screen name="dev-test" /> : null}

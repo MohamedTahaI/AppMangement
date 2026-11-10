@@ -19,7 +19,7 @@ import { FilterBar } from '@/components/ui/FilterBar';
 import { getCurrentMonth } from '@/components/ui/MonthPicker';
 import { MoneyText } from '@/components/ui/MoneyText';
 import { ScreenTitle } from '@/components/ui/ScreenTitle';
-import { formatDate } from '@/services/dateFormat';
+import { formatDate } from '@/utils/format';
 import { theme } from '@/components/ui/theme';
 import { arabicErrorMessage } from '@/services/errors';
 

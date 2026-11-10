@@ -31,7 +31,10 @@ export default function DevTestScreen() {
     <ScrollView contentContainerStyle={styles.container}>
       <AppText style={styles.title}>اختبار قاعدة البيانات والتحصيل</AppText>
       <AppText style={styles.description}>
-        يختبر التحصيل والدفعات، وتطابق إجماليات PDF وExcel والجدول، ثم ينشئ نسخة احتياطية ويستعيدها ويتأكد من ثبات الإجماليات.
+        يختبر التحصيل والدفعات، وتطابق إجماليات PDF وExcel وجداول المزامنة الأحد عشر، ثم ينشئ نسخة احتياطية ويستعيدها ويتأكد من ثبات الإجماليات.
+      </AppText>
+      <AppText style={styles.description}>
+        اختبار المزامنة اليدوي: اربط جدول تجربة، أضف 3 تغييرات، وتأكد أن العداد يعرض 3 ثم يرسل 3 فقط. ثم أغلق الإنترنت، أضف تغييرين، وأعد الاتصال وتأكد أنه يرسل 2 فقط.
       </AppText>
 
       <Pressable

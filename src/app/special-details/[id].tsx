@@ -1,5 +1,5 @@
 import { SectionHeader } from '@/components/ui/SectionHeader';
-import { formatDate } from '@/services/dateFormat';
+import { formatDate } from '@/utils/format';
 import { AppText } from '@/components/ui/AppText';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';

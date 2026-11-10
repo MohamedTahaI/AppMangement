@@ -86,8 +86,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   compact: {
-    height: 40,
-    minHeight: 40,
+    height: 44,
+    minHeight: 44,
     paddingHorizontal: 14,
     paddingVertical: 0,
     borderRadius: 12,

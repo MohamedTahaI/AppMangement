@@ -18,6 +18,7 @@ export interface ApartmentReportRow {
 }
 
 export interface ReportPayment {
+  id: number;
   date: string;
   apartmentNumber: string;
   ownerName: string;
@@ -28,6 +29,7 @@ export interface ReportPayment {
 }
 
 export interface ReportExpense {
+  id: number;
   date: string;
   category: string;
   amount: number;
@@ -36,6 +38,7 @@ export interface ReportExpense {
 }
 
 export interface ReportAdjustment {
+  id: number;
   date: string;
   type: 'زيادة' | 'نقص';
   amount: number;
@@ -76,7 +79,14 @@ export interface ReportData {
   expensesByCategory: { category: string; total: number }[];
   adjustments: ReportAdjustment[];
   unpaid: { apartmentNumber: string; ownerName: string; monthsUnpaid: string[]; remaining: number }[];
-  monthlySummary: { month: string; collected: number; expenses: number }[];
+  monthlySummary: {
+    month: string;
+    collected: number;
+    specialCollected: number;
+    adjustments: number;
+    expenses: number;
+    balance: number;
+  }[];
   monthlyMatrix: {
     year: number;
     apartments: {
@@ -101,6 +111,7 @@ interface ChargeRow {
 }
 
 interface PaymentRow {
+  id: number;
   date: string;
   apartmentNumber: string;
   ownerName: string;
@@ -141,8 +152,9 @@ export async function getReportData(period: ReportPeriod): Promise<ReportData> {
   const expensePeriod = periodSql('e.month', start, end);
   const adjustmentPeriod = periodSql('adj.adjustment_date', start, end);
   const specialPeriod = periodSql('s.date', start, end);
+  const specialExistsPeriod = periodSql('ps.date', start, end);
 
-  const [building, activeApartments, chargeRows, paymentRows, expenses, adjustments, collectionRows, monthlyRows, monthTotals] = await Promise.all([
+  const [building, activeApartments, chargeRows, paymentRows, expenses, adjustments, collectionRows, monthlyRows, monthTotals, specialMonthTotals, adjustmentMonthTotals] = await Promise.all([
     db.getFirstAsync<{ value: string }>("SELECT value FROM settings WHERE key = 'building_name'"),
     db.getAllAsync<{ number: string; ownerName: string }>(
       'SELECT number, owner_name AS ownerName FROM apartments WHERE active = 1 ORDER BY number',
@@ -154,20 +166,20 @@ export async function getReportData(period: ReportPeriod): Promise<ReportData> {
        FROM apartments a
        LEFT JOIN charges c ON c.apartment_id = a.id AND (
          c.type = 'monthly'${start && end ? ' AND c.month >= ? AND c.month <= ?' : ''}
-         OR (c.type = 'special' AND EXISTS (
-           SELECT 1 FROM special_collections ps WHERE ps.id = c.special_id${specialPeriod.sql}
-         ))
-       )
-       LEFT JOIN special_collections s ON s.id = c.special_id
-       LEFT JOIN (
-         SELECT charge_id, SUM(amount) AS paid FROM payments WHERE deleted = 0 GROUP BY charge_id
-       ) pt ON pt.charge_id = c.id
-       WHERE a.active = 1 OR c.id IS NOT NULL
-       ORDER BY a.number, c.month, c.id`,
-      [...(start && end ? [start, end] : []), ...specialPeriod.params],
+           OR (c.type = 'special' AND EXISTS (
+             SELECT 1 FROM special_collections ps WHERE ps.id = c.special_id${specialExistsPeriod.sql}
+           ))
+         )
+         LEFT JOIN special_collections s ON s.id = c.special_id
+         LEFT JOIN (
+           SELECT charge_id, SUM(amount) AS paid FROM payments WHERE deleted = 0 GROUP BY charge_id
+         ) pt ON pt.charge_id = c.id
+         WHERE a.active = 1 OR c.id IS NOT NULL
+         ORDER BY a.number, c.month, c.id`,
+       [...(start && end ? [start, end] : []), ...specialExistsPeriod.params],
     ),
     db.getAllAsync<PaymentRow>(
-      `SELECT p.paid_date AS date, a.number AS apartmentNumber, a.owner_name AS ownerName,
+      `SELECT p.id, p.paid_date AS date, a.number AS apartmentNumber, a.owner_name AS ownerName,
         c.type, c.month, s.title AS specialTitle, p.amount, p.note
        FROM payments p JOIN charges c ON c.id = p.charge_id
        JOIN apartments a ON a.id = c.apartment_id
@@ -177,7 +189,7 @@ export async function getReportData(period: ReportPeriod): Promise<ReportData> {
       paymentPeriod.params,
     ),
     db.getAllAsync<ReportExpense>(
-      `SELECT e.expense_date AS date, cat.name AS category, e.amount, e.note,
+      `SELECT e.id, e.expense_date AS date, cat.name AS category, e.amount, e.note,
         COALESCE(s.title, '') AS linkedCollection
        FROM expenses e JOIN expense_categories cat ON cat.id = e.category_id
        LEFT JOIN special_collections s ON s.id = e.special_id
@@ -186,10 +198,10 @@ export async function getReportData(period: ReportPeriod): Promise<ReportData> {
       expensePeriod.params,
     ),
     db.getAllAsync<{
-      date: string; type: 'increase' | 'decrease'; amount: number;
+      id: number; date: string; type: 'increase' | 'decrease'; amount: number;
       reason: string; status: 'active' | 'cancelled'; cancelReason: string | null;
     }>(
-      `SELECT adj.adjustment_date AS date, adj.type, adj.amount, adj.reason,
+      `SELECT adj.id, adj.adjustment_date AS date, adj.type, adj.amount, adj.reason,
         adj.status, adj.cancel_reason AS cancelReason
        FROM adjustments adj${start && end ? ` WHERE substr(adj.adjustment_date, 1, 7) >= ? AND substr(adj.adjustment_date, 1, 7) <= ?` : ''}
        ORDER BY adj.adjustment_date, adj.id`,
@@ -233,8 +245,21 @@ export async function getReportData(period: ReportPeriod): Promise<ReportData> {
          FROM expenses WHERE deleted = 0 GROUP BY month
        ) GROUP BY month ORDER BY month`,
     ),
+    db.getAllAsync<{ month: string; total: number }>(
+      `SELECT substr(p.paid_date, 1, 7) AS month, SUM(p.amount) AS total
+       FROM payments p JOIN charges c ON c.id = p.charge_id
+       WHERE p.deleted = 0 AND c.type = 'special'
+       GROUP BY substr(p.paid_date, 1, 7)`,
+    ),
+    db.getAllAsync<{ month: string; total: number }>(
+      `SELECT substr(adjustment_date, 1, 7) AS month,
+         SUM(CASE WHEN type = 'increase' THEN amount ELSE -amount END) AS total
+       FROM adjustments WHERE status = 'active'
+       GROUP BY substr(adjustment_date, 1, 7)`,
+    ),
   ]);
   const payments: ReportPayment[] = paymentRows.map((payment) => ({
+    id: payment.id,
     date: payment.date,
     apartmentNumber: payment.apartmentNumber,
     ownerName: payment.ownerName,
@@ -366,6 +391,7 @@ export async function getReportData(period: ReportPeriod): Promise<ReportData> {
     expenses,
     expensesByCategory: [...categoryTotals].map(([category, total]) => ({ category, total })),
     adjustments: adjustments.map((row) => ({
+      id: row.id,
       date: row.date,
       type: row.type === 'increase' ? 'زيادة' : 'نقص',
       amount: row.amount,
@@ -374,9 +400,34 @@ export async function getReportData(period: ReportPeriod): Promise<ReportData> {
       cancelReason: row.cancelReason ?? '',
     })),
     unpaid,
-    monthlySummary: monthTotals
-      .filter((row) => !start || (row.month >= start && row.month <= (end ?? start)))
-      .map((row) => ({ month: row.month, collected: row.collected, expenses: row.expenses })),
+    monthlySummary: (() => {
+      const specialByMonth = new Map(specialMonthTotals.map((row) => [row.month, Number(row.total) || 0]));
+      const adjustmentsByMonth = new Map(adjustmentMonthTotals.map((row) => [row.month, Number(row.total) || 0]));
+      const totalsByMonth = new Map<string, { collected: number; expenses: number }>();
+      for (const row of monthTotals) {
+        totalsByMonth.set(row.month, {
+          collected: Number(row.collected) || 0,
+          expenses: Number(row.expenses) || 0,
+        });
+      }
+      for (const month of adjustmentsByMonth.keys()) {
+        if (!totalsByMonth.has(month)) totalsByMonth.set(month, { collected: 0, expenses: 0 });
+      }
+      return [...totalsByMonth.entries()]
+        .filter(([month]) => !start || (month >= start && month <= (end ?? start)))
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([month, totals]) => {
+          const adjustmentsForMonth = adjustmentsByMonth.get(month) ?? 0;
+          return {
+            month,
+            collected: totals.collected,
+            specialCollected: specialByMonth.get(month) ?? 0,
+            adjustments: adjustmentsForMonth,
+            expenses: totals.expenses,
+            balance: totals.collected + adjustmentsForMonth - totals.expenses,
+          };
+        });
+    })(),
     monthlyMatrix: [...matrixYears.entries()]
       .sort(([a], [b]) => a - b)
       .map(([year, rows]) => ({

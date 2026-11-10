@@ -58,10 +58,9 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily,
   },
   action: {
-    width: '45%',
     flexShrink: 0,
-    maxWidth: '45%',
+    maxWidth: '55%',
     minWidth: 0,
-    alignItems: 'stretch',
+    alignItems: 'flex-end',
   },
 });

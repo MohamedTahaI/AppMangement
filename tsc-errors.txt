@@ -1,0 +1,5 @@
+﻿src/app/(tabs)/expenses.tsx(21,8): error TS1005: ';' expected.
+src/app/(tabs)/expenses.tsx(22,8): error TS1005: ';' expected.
+src/app/(tabs)/expenses.tsx(23,1): error TS1109: Expression expected.
+src/app/(tabs)/expenses.tsx(23,3): error TS1434: Unexpected keyword or identifier.
+src/app/(tabs)/index.tsx(445,3): error TS1128: Declaration or statement expected.

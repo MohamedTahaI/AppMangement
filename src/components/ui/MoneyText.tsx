@@ -1,7 +1,10 @@
 import { AppText } from '@/components/ui/AppText';
 import { StyleSheet, TextProps } from 'react-native';
 
+import { formatMoney } from '@/utils/format';
 import { theme } from './theme';
+
+export { formatMoney };
 
 export interface MoneyTextProps extends TextProps {
   amount: number;
@@ -9,8 +12,9 @@ export interface MoneyTextProps extends TextProps {
   currencyColor?: string;
 }
 
-export function formatMoney(amount: number): string {
-  return `${amount.toLocaleString('en-US', { maximumFractionDigits: 2 })} ج`;
+function formatNumber(amount: number): string {
+  const value = amount.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  return amount < 0 ? `\u200E${value}\u200E` : value;
 }
 
 export function MoneyText({
@@ -22,7 +26,7 @@ export function MoneyText({
 }: MoneyTextProps) {
   return (
     <AppText {...props} style={[styles.text, { fontSize: size }, style]}>
-      <AppText>{amount.toLocaleString('en-US', { maximumFractionDigits: 2 })}</AppText>
+      <AppText>{formatNumber(amount)}</AppText>
       <AppText style={[styles.currency, { color: currencyColor, fontSize: Math.max(theme.typography.small, size * 0.62) }]}> ج</AppText>
     </AppText>
   );

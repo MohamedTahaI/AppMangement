@@ -1,9 +1,16 @@
-import { AppText } from '@/components/ui/AppText';
-import { SectionHeader } from '@/components/ui/SectionHeader';
-import { formatDate } from '@/services/dateFormat';
+﻿import { AppText } from '@/components/ui/AppText';
+import { Section } from '@/components/ui/Section';
+import { Screen } from '@/components/ui/Screen';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useState, useEffect } from 'react';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 
 import {
   addExpense,
@@ -24,11 +31,12 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FormField } from '@/components/ui/FormField';
 import { FilterBar } from '@/components/ui/FilterBar';
+import { ActivityRow } from '@/components/ui/ActivityRow';
 import { getCurrentMonth, getMonthLabel } from '@/components/ui/MonthPicker';
 import { MonthTransition } from '@/components/ui/MonthTransition';
 import { MoneyText } from '@/components/ui/MoneyText';
 import { ScreenTitle } from '@/components/ui/ScreenTitle';
-import { theme } from '@/components/ui/theme';
+import { theme } from '@/theme';
 import { arabicErrorMessage } from '@/services/errors';
 
 function localToday(): string {
@@ -52,9 +60,11 @@ export default function ExpensesScreen() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [specials, setSpecials] = useState<SpecialCollection[]>([]);
   const [fixedAmounts, setFixedAmounts] = useState<Record<number, string>>({});
+  const [fixedOriginals, setFixedOriginals] = useState<Record<number, string>>({});
   const [monthTotal, setMonthTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [savingFixedId, setSavingFixedId] = useState<number | null>(null);
+  const [savedFixed, setSavedFixed] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [pendingFixedSave, setPendingFixedSave] = useState<PendingFixedSave | null>(null);
@@ -69,6 +79,13 @@ export default function ExpensesScreen() {
   const [savingOther, setSavingOther] = useState(false);
   const [confirmEditVisible, setConfirmEditVisible] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Expense | null>(null);
+
+  useEffect(() => {
+    if (savedFixed !== null) {
+      const timer = setTimeout(() => setSavedFixed(null), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [savedFixed]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -91,6 +108,7 @@ export default function ExpensesScreen() {
         nextFixedAmounts[category.id] = existing.length > 0 ? String(total) : '';
       }
       setFixedAmounts(nextFixedAmounts);
+      setFixedOriginals(nextFixedAmounts);
     } catch (loadError) {
       setError(arabicErrorMessage(loadError, 'تعذر تحميل المصروفات. حاول مرة أخرى.'));
     } finally {
@@ -155,6 +173,7 @@ export default function ExpensesScreen() {
       await saveFixedExpense(category.id, month, fixedAmount, `${month}-01`);
       setConfirmFixedVisible(false);
       setPendingFixedSave(null);
+      setSavedFixed(category.id);
       setNotice(
         fixedAmount === null
           ? `تم تسجيل أن «${category.name}» لم يحدث هذا الشهر.`
@@ -246,54 +265,55 @@ export default function ExpensesScreen() {
     return isOther && categoryMatches && searchMatches;
   }).sort((a, b) => sort === 'amount' ? b.amount - a.amount : b.expense_date.localeCompare(a.expense_date));
 
+  const hasOtherCategory = categories.some((item) => item.is_fixed === 0 && item.active === 1);
+
   return (
-    <>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <ScreenTitle title="المصروفات" />
-        <FilterBar
-          search={search}
-          onSearchChange={setSearch}
-          month={month}
-          onMonthChange={(nextMonth) => {
-            setMonth(nextMonth);
-            setNotice(null);
-          }}
-          defaultSort="date"
-          sort={sort}
-          sortOptions={[
-            { value: 'date', label: 'التاريخ' },
-            { value: 'amount', label: 'أكبر مبلغ' },
-          ]}
-          onSortChange={setSort}
-          extraFilterCount={Number(categoryFilter !== 'all')}
-          mainFilters={
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterOptions}>
-              {[
-                { value: 'all', label: 'الكل' },
-                { value: 'fixed', label: 'الثابتة' },
-                { value: 'other', label: 'الأخرى' },
-                ...categories.map((category) => ({ value: String(category.id), label: category.name })),
-              ].map((option) => (
-                <Pressable
-                  key={option.value}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: categoryFilter === option.value }}
-                  onPress={() => setCategoryFilter(option.value)}
-                  style={[styles.filterOption, categoryFilter === option.value && styles.filterOptionSelected]}>
-                  <AppText style={[styles.filterOptionText, categoryFilter === option.value && styles.filterOptionTextSelected]}>
-                    {option.label}
-                  </AppText>
-                </Pressable>
-              ))}
-            </ScrollView>
-          }
-          resultCount={fixedCategories.length + otherExpenses.length}
-          totalCount={categories.filter((category) => category.active === 1).length + expenses.length}
-          totalAmount={otherExpenses.reduce((sum, expense) => sum + expense.amount, 0)
-            + fixedCategories.reduce((sum, category) => sum + (Number(fixedAmounts[category.id]) || 0), 0)}
-          onClear={() => { setSearch(''); setCategoryFilter('all'); setSort('date'); setMonth(getCurrentMonth()); }}
-        />
-        <MonthTransition month={month}>
+    <Screen>
+      <ScreenTitle title="المصروفات" />
+      <FilterBar
+        search={search}
+        onSearchChange={setSearch}
+        month={month}
+        onMonthChange={(nextMonth) => {
+          setMonth(nextMonth);
+          setNotice(null);
+        }}
+        defaultSort="date"
+        sort={sort}
+        sortOptions={[
+          { value: 'date', label: 'التاريخ' },
+          { value: 'amount', label: 'أكبر مبلغ' },
+        ]}
+        onSortChange={setSort}
+        extraFilterCount={Number(categoryFilter !== 'all')}
+        mainFilters={
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterOptions}>
+            {[
+              { value: 'all', label: 'الكل' },
+              { value: 'fixed', label: 'الثابتة' },
+              { value: 'other', label: 'الأخرى' },
+              ...categories.map((category) => ({ value: String(category.id), label: category.name })),
+            ].map((option) => (
+              <Pressable
+                key={option.value}
+                accessibilityRole="button"
+                accessibilityState={{ selected: categoryFilter === option.value }}
+                onPress={() => setCategoryFilter(option.value)}
+                style={[styles.filterOption, categoryFilter === option.value && styles.filterOptionSelected]}>
+                <AppText style={[styles.filterOptionText, categoryFilter === option.value && styles.filterOptionTextSelected]}>
+                  {option.label}
+                </AppText>
+              </Pressable>
+            ))}
+          </ScrollView>
+        }
+        resultCount={fixedCategories.length + otherExpenses.length}
+        totalCount={categories.filter((category) => category.active === 1).length + expenses.length}
+        totalAmount={otherExpenses.reduce((sum, expense) => sum + expense.amount, 0)
+          + fixedCategories.reduce((sum, category) => sum + (Number(fixedAmounts[category.id]) || 0), 0)}
+        onClear={() => { setSearch(''); setCategoryFilter('all'); setSort('date'); setMonth(getCurrentMonth()); }}
+      />
+      <MonthTransition month={month}>
         <Card variant="surface" style={styles.totalCard}>
           <AppText style={styles.totalLabel}>إجمالي مصروفات {getMonthLabel(month)}</AppText>
           <MoneyText amount={monthTotal} />
@@ -302,148 +322,171 @@ export default function ExpensesScreen() {
         {notice ? <AppText style={styles.success}>{notice}</AppText> : null}
         {loading ? <AppText style={styles.message}>جارٍ تحميل المصروفات...</AppText> : null}
 
-        <SectionHeader title="المصروفات الثابتة" />
-        {!loading && fixedCategories.length === 0 ? (
-          <EmptyState message="لا توجد أنواع مصروفات ثابتة. أضف نوعاً من المزيد." />
-        ) : null}
-        {fixedCategories.map((category) => {
-          const exists = expenses.some((expense) => expense.category_id === category.id);
-          return (
-            <Card key={category.id}>
-              <AppText style={styles.categoryTitle}>{category.name}</AppText>
-              <FormField
-                label="المبلغ"
-                value={fixedAmounts[category.id] ?? ''}
-                onChangeText={(value) =>
-                  setFixedAmounts((current) => ({ ...current, [category.id]: value }))
-                }
-                keyboardType="decimal-pad"
-                placeholder="اتركه فارغاً إذا لم يحدث"
-              />
-              {!exists && !fixedAmounts[category.id] ? (
-                <AppText style={styles.helper}>لم يحدث هذا الشهر</AppText>
-              ) : null}
-              <BigButton
-                title={savingFixedId === category.id ? 'جارٍ الحفظ...' : 'حفظ'}
-                onPress={() => saveFixed(category)}
-                disabled={savingFixedId === category.id || loading}
-              />
-            </Card>
-          );
-        })}
+        <Section
+          title="المصروفات الثابتة"
+          subtitle="اترك الخانة فاضية لو المصروف لم يحدث هذا الشهر"
+        >
+          {!loading && fixedCategories.length === 0 ? (
+            <EmptyState message="لا توجد أنواع مصروفات ثابتة. أضف نوعاً من المزيد." />
+          ) : null}
+          {fixedCategories.map((category) => {
+            const original = fixedOriginals[category.id] ?? '';
+            const current = fixedAmounts[category.id] ?? '';
+            const changed = current.trim() !== original.trim();
+            const isSaving = savingFixedId === category.id;
+            const saved = savedFixed === category.id;
+            return (
+              <Card key={category.id} variant="surface" style={styles.fixedRow}>
+                <AppText
+                  style={styles.fixedName}
+                  numberOfLines={1}
+                  accessibilityLabel={`مصروف ثابت: ${category.name}`}
+                >
+                  {category.name}
+                </AppText>
+                <TextInput
+                  style={styles.fixedInput}
+                  value={current}
+                  onChangeText={(value) =>
+                    setFixedAmounts((currentValues) => ({ ...currentValues, [category.id]: value }))
+                  }
+                  keyboardType="decimal-pad"
+                  placeholder="—"
+                  placeholderTextColor={theme.colors.muted}
+                  accessibilityLabel="المبلغ"
+                />
+                {saved ? (
+                  <AppText style={styles.savedText}>تم الحفظ</AppText>
+                ) : (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`حفظ ${category.name}`}
+                    disabled={!changed || isSaving || loading}
+                    onPress={() => saveFixed(category)}
+                    style={styles.saveButton}
+                  >
+                    <MaterialIcons name="check" size={20} color={theme.colors.onPrimary} />
+                  </Pressable>
+                )}
+              </Card>
+            );
+          })}
+        </Section>
 
-        <SectionHeader
+        <Section
           title="مصروفات أخرى"
-          style={styles.otherHeader}
           action={
-          <BigButton
-            title="إضافة مصروف"
-            onPress={openNewExpense}
-            size="compact"
-            icon="add"
-            numberOfLines={1}
-            style={styles.addButton}
-            disabled={!categories.some((item) => item.is_fixed === 0 && item.active === 1)}
-          />
+            <BigButton
+              title="إضافة مصروف"
+              icon="add"
+              size="compact"
+              numberOfLines={1}
+              onPress={openNewExpense}
+              disabled={!hasOtherCategory}
+              style={{ height: 40, minHeight: 40 }}
+            />
           }
-        />
-        {!loading && otherExpenses.length === 0 ? (
-          <EmptyState message="لا توجد مصروفات أخرى لهذا الشهر." />
-        ) : null}
-        {otherExpenses.map((expense) => {
-          const category = categories.find((item) => item.id === expense.category_id);
-          return (
-            <Card key={expense.id}>
-              <View style={styles.expenseRow}>
-                <View style={styles.expenseInfo}>
-                  <AppText style={styles.categoryTitle}>{category?.name ?? 'مصروف'}</AppText>
-                  <AppText style={styles.helper}>{formatDate(expense.expense_date)}</AppText>
-                  {expense.note ? <AppText style={styles.helper}>{expense.note}</AppText> : null}
-                  {expense.special_id !== null ? (
-                    <AppText style={styles.helper}>
-                      {specials.find((item) => item.id === expense.special_id)?.title ?? 'تحصيل خاص'}
-                    </AppText>
-                  ) : null}
-                </View>
-                <MoneyText amount={expense.amount} size={theme.typography.section} />
-              </View>
-              <View style={styles.actions}>
-                <Pressable onPress={() => openEditExpense(expense)} style={styles.actionButton}>
-                  <AppText style={styles.actionText}>تعديل</AppText>
-                </Pressable>
-                <Pressable onPress={() => setPendingDelete(expense)} style={styles.actionButton}>
-                  <AppText style={styles.deleteText}>حذف</AppText>
-                </Pressable>
-              </View>
-            </Card>
-          );
-        })}
-        </MonthTransition>
-      </ScrollView>
+        >
+          {!loading && otherExpenses.length === 0 ? (
+            <EmptyState message="لا توجد مصروفات أخرى لهذا الشهر." />
+          ) : null}
+          {otherExpenses.map((expense) => {
+            const category = categories.find((item) => item.id === expense.category_id);
+            const special = specials.find((item) => item.id === expense.special_id);
+            return (
+              <ActivityRow
+                key={expense.id}
+                type="expense"
+                title={category?.name ?? 'مصروف'}
+                date={expense.expense_date}
+                note={expense.note
+                  ? special
+                    ? `${expense.note} · ${special.title}`
+                    : expense.note
+                  : special
+                    ? special.title
+                    : ''}
+                amount={-expense.amount}
+                onPress={() => openEditExpense(expense)}
+              />
+            );
+          })}
+        </Section>
+      </MonthTransition>
 
       <AppBottomSheet
         visible={editorVisible}
         title={editing ? 'تعديل المصروف' : 'إضافة مصروف'}
         snapPoints={['75%', '90%']}
         onClose={() => setEditorVisible(false)}>
-            <AppText style={styles.fieldLabel}>نوع المصروف</AppText>
-            {categories.filter(
+        <FormField label="نوع المصروف" value={categoryId === null ? '' : String(categoryId)} onChangeText={(t) => setCategoryId(t ? Number(t) : null)} />
+        {categories.filter(
+          (item) =>
+            (item.is_fixed === 0 && item.active === 1)
+            || editing?.category_id === item.id,
+        ).length === 0 ? (
+          <EmptyState message="أضف نوع مصروف غير ثابت من المزيد أولاً." />
+        ) : null}
+        <View style={styles.optionList}>
+          {categories
+            .filter(
               (item) =>
                 (item.is_fixed === 0 && item.active === 1)
                 || editing?.category_id === item.id,
-            ).length === 0 ? (
-              <EmptyState message="أضف نوع مصروف غير ثابت من المزيد أولاً." />
-            ) : null}
-            <View style={styles.optionList}>
-              {categories
-                .filter(
-                  (item) =>
-                    (item.is_fixed === 0 && item.active === 1)
-                    || editing?.category_id === item.id,
-                )
-                .map((category) => (
-                <Pressable
-                  key={category.id}
-                  onPress={() => setCategoryId(category.id)}
-                  style={[styles.option, categoryId === category.id && styles.selectedOption]}>
-                  <AppText style={styles.optionText}>{category.name}</AppText>
-                </Pressable>
-              ))}
-            </View>
-            <FormField label="المبلغ" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" />
-            <FormField label="التاريخ" value={expenseDate} onChangeText={setExpenseDate} placeholder="مثال: 2026-01-31" />
-            <FormField label="ملاحظة (اختياري)" value={note} onChangeText={setNote} />
-            <AppText style={styles.fieldLabel}>من أي تحصيل خاص؟ (اختياري)</AppText>
-            <View style={styles.optionList}>
-              {specials.length === 0 ? (
-                <EmptyState message="لا توجد تحصيلات خاصة محفوظة." />
-              ) : null}
+            )
+            .map((item) => (
               <Pressable
-                onPress={() => setSpecialId(null)}
-                style={[styles.option, specialId === null && styles.selectedOption]}>
-                <AppText style={styles.optionText}>بدون تحصيل خاص</AppText>
+                key={item.id}
+                onPress={() => setCategoryId(item.id)}
+                style={[styles.option, categoryId === item.id && styles.selectedOption]}>
+                <AppText style={styles.optionText}>{item.name}</AppText>
               </Pressable>
-              {specials.map((special) => (
-                <Pressable
-                  key={special.id}
-                  onPress={() => setSpecialId(special.id)}
-                  style={[styles.option, specialId === special.id && styles.selectedOption]}>
-                  <AppText style={styles.optionText}>{special.title}</AppText>
-                </Pressable>
-              ))}
-            </View>
-            {error ? <AppText style={styles.error}>{error}</AppText> : null}
-            <BigButton
-              title="حفظ المصروف"
-              onPress={() => void saveOther()}
-              loading={savingOther}
-            />
-            <BigButton
-              title="إلغاء"
-              variant="secondary"
-              disabled={savingOther}
-              onPress={() => setEditorVisible(false)}
-            />
+            ))}
+        </View>
+        <FormField label="المبلغ" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="أدخل المبلغ" />
+        <FormField label="تاريخ المصروف" value={expenseDate} onChangeText={setExpenseDate} />
+        <FormField label="ملاحظة (اختياري)" value={note} onChangeText={setNote} />
+        <FormField label="من أي تحصيل خاص؟ (اختياري)" />
+        <View style={styles.optionList}>
+          {specials.length === 0 ? (
+            <EmptyState message="لا توجد تحصيلات خاصة محفوظة." />
+          ) : null}
+          <Pressable
+            onPress={() => setSpecialId(null)}
+            style={[styles.option, specialId === null && styles.selectedOption]}>
+            <AppText style={styles.optionText}>بدون تحصيل خاص</AppText>
+          </Pressable>
+          {specials.map((special) => (
+            <Pressable
+              key={special.id}
+              onPress={() => setSpecialId(special.id)}
+              style={[styles.option, specialId === special.id && styles.selectedOption]}>
+              <AppText style={styles.optionText}>{special.title}</AppText>
+            </Pressable>
+          ))}
+        </View>
+        {error ? <AppText style={styles.error}>{error}</AppText> : null}
+        <BigButton
+          title="حفظ المصروف"
+          onPress={() => void saveOther()}
+          loading={savingOther}
+        />
+        {editing ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="حذف هذا المصروف"
+            onPress={() => { setEditorVisible(false); setPendingDelete(editing); }}
+            style={styles.deleteEditor}
+          >
+            <AppText style={styles.deleteEditorText}>حذف هذا المصروف</AppText>
+          </Pressable>
+        ) : null}
+        <BigButton
+          title="إلغاء"
+          variant="secondary"
+          disabled={savingOther}
+          onPress={() => setEditorVisible(false)}
+        />
       </AppBottomSheet>
 
       <ConfirmDialog
@@ -479,20 +522,14 @@ export default function ExpensesScreen() {
         onConfirm={() => void deleteOther()}
         onCancel={() => setPendingDelete(null)}
       />
-    </>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flexGrow: 1,
-    padding: theme.spacingScale.screen,
-    paddingTop: theme.spacingScale.md,
-    paddingBottom: theme.spacingScale.lg,
-    gap: theme.spacingScale.sm,
     backgroundColor: theme.colors.background,
     writingDirection: 'rtl',
-    direction: 'rtl',
   },
   totalCard: {
     alignItems: 'stretch',
@@ -518,30 +555,63 @@ const styles = StyleSheet.create({
     textAlign: 'auto',
     writingDirection: 'rtl',
   },
-  sectionTitle: {
-    width: '100%',
-    color: theme.colors.text,
-    fontSize: theme.typography.heading,
-    fontFamily: theme.typography.extraBold,
-    textAlign: 'auto',
-    writingDirection: 'rtl',
+  fixedRow: {
+    flexDirection: 'row',
+    direction: 'rtl',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacingScale.xs,
+    minHeight: 72,
   },
-  addButton: {
-    width: '100%',
+  fixedName: {
+    flex: 1,
     minWidth: 0,
+    color: theme.colors.text,
+    fontSize: 18,
+    fontFamily: theme.typography.bold,
+    textAlign: 'auto',
   },
-  otherHeader: { marginBottom: 12 },
-  categoryTitle: {
+  fixedInput: {
+    width: 110,
+    height: 44,
+    fontSize: 18,
+    fontFamily: theme.typography.bold,
+    textAlign: 'center',
+    borderWidth: theme.borderWidths.hairline,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radii.sm,
+    paddingHorizontal: 8,
+    color: theme.colors.text,
+    backgroundColor: theme.colors.surface,
+  },
+  saveButton: {
+    width: 44,
+    height: 44,
+    borderRadius: theme.radii.pill,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  savedText: {
+    color: theme.colors.secondaryText,
+    fontSize: theme.typography.small,
+    fontFamily: theme.typography.medium,
+    textAlign: 'auto',
+  },
+  optionList: { gap: theme.spacingScale.xs },
+  option: {
+    minHeight: theme.sizes.touchCompact,
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacingScale.sm,
+    borderWidth: theme.borderWidths.hairline,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radii.sm,
+    backgroundColor: theme.colors.surface,
+  },
+  selectedOption: { borderWidth: theme.borderWidths.strong, borderColor: theme.colors.primary, backgroundColor: theme.colors.successBackground },
+  optionText: {
     width: '100%',
     color: theme.colors.text,
-    fontSize: theme.typography.section,
-    fontFamily: theme.typography.extraBold,
-    textAlign: 'auto',
-    writingDirection: 'rtl',
-  },
-  helper: {
-    width: '100%',
-    color: theme.colors.secondaryText,
     fontSize: theme.typography.body,
     textAlign: 'auto',
     writingDirection: 'rtl',
@@ -566,67 +636,16 @@ const styles = StyleSheet.create({
     textAlign: 'auto',
     writingDirection: 'rtl',
   },
-  expenseRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: theme.spacingScale.xs,
-    alignItems: 'flex-start',
-  },
-  expenseInfo: {
-    flex: 1,
-    gap: theme.spacingScale.xs,
-    alignItems: 'flex-end',
-  },
-  actions: {
-    flexDirection: 'row',
-    gap: theme.spacingScale.xs,
-  },
-  actionButton: {
-    minWidth: theme.sizes.rowLarge,
-    minHeight: theme.sizes.touchCompact,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  actionText: {
-    color: theme.colors.primary,
-    fontSize: theme.typography.body,
-    fontFamily: theme.typography.bold,
-  },
-  deleteText: {
-    color: theme.colors.danger,
-    fontSize: theme.typography.body,
-    fontFamily: theme.typography.bold,
-  },
-  fieldLabel: {
-    width: '100%',
-    color: theme.colors.text,
-    fontSize: theme.typography.body,
-    fontFamily: theme.typography.bold,
-    textAlign: 'auto',
-    writingDirection: 'rtl',
-  },
-  optionList: {
-    gap: theme.spacingScale.xs,
-  },
-  option: {
+  deleteEditor: {
+    alignSelf: 'flex-start',
     minHeight: theme.sizes.touchCompact,
     justifyContent: 'center',
     paddingHorizontal: theme.spacingScale.sm,
-    borderWidth: theme.borderWidths.hairline,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radii.sm,
-    backgroundColor: theme.colors.surface,
   },
-  selectedOption: {
-    borderWidth: theme.borderWidths.strong,
-    borderColor: theme.colors.primary,
-    backgroundColor: theme.colors.successBackground,
-  },
-  optionText: {
-    width: '100%',
-    color: theme.colors.text,
+  deleteEditorText: {
+    color: theme.colors.danger,
     fontSize: theme.typography.body,
+    fontFamily: theme.typography.bold,
     textAlign: 'auto',
-    writingDirection: 'rtl',
   },
 });

@@ -147,6 +147,9 @@ async function migrate(db: SQLiteDatabase): Promise<void> {
       ['sheet_revision', ''],
       ['sheet_schema_version', '1'],
       ['reduce_motion', '0'],
+      ['backup_reminders_enabled', '1'],
+      ['backup_permission_asked', '0'],
+      ['sync_banner_dismissed_at', ''],
     ]) {
       await db.runAsync('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)', key, value);
     }

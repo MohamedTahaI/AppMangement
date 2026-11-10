@@ -2,8 +2,8 @@ import { SectionHeader } from '@/components/ui/SectionHeader';
 import { AppText } from '@/components/ui/AppText';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { getDocumentAsync } from 'expo-document-picker';
 import { File, Paths } from 'expo-file-system';
+import { copyAsync, deleteAsync, readAsStringAsync } from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -22,6 +22,7 @@ import { createDatabaseBackup, restoreDatabaseBackup, validateDatabaseBackup, ty
 import { getReportData, type ReportPeriod } from '@/services/reportData';
 import { buildReportPdfHtml } from '@/services/reportPdf';
 import { writeReportWorkbook } from '@/services/reportExcel';
+import { scheduleBackupReminders } from '@/services/reminders';
 
 type PeriodKind = ReportPeriod['kind'];
 
@@ -29,6 +30,34 @@ function periodFor(kind: PeriodKind, month: string, year: number): ReportPeriod 
   if (kind === 'all') return { kind: 'all' };
   if (kind === 'year') return { kind: 'year', value: String(year) };
   return { kind: 'month', value: month };
+}
+
+function periodFileLabel(kind: PeriodKind, month: string, year: number): string {
+  if (kind === 'all') return 'الكل';
+  if (kind === 'year') return `${year}-السنة`;
+  return month;
+}
+
+async function readPickedFile(uri: string): Promise<string> {
+  let directError: unknown = null;
+  try {
+    return await new File(uri).text();
+  } catch (error) {
+    directError = error;
+  }
+  const cached = new File(Paths.cache, `restore-${Date.now()}.json`);
+  try {
+    await copyAsync({ from: uri, to: cached.uri });
+    return await readAsStringAsync(cached.uri, { encoding: 'utf8' });
+  } catch (fallbackError) {
+    const detail = [directError, fallbackError]
+      .map((error) => (error instanceof Error ? error.message : String(error)))
+      .filter(Boolean)
+      .join(' | ');
+    throw new Error(`تعذر قراءة الملف من الجهاز. (${detail})`, { cause: fallbackError });
+  } finally {
+    await deleteAsync(cached.uri, { idempotent: true }).catch(() => undefined);
+  }
 }
 
 function technicalError(error: unknown): string {
@@ -110,8 +139,13 @@ export default function ExportBackupScreen() {
         width: 595,
         height: 842,
         textZoom: 100,
+        base64: true,
       });
-      await Sharing.shareAsync(pdf.uri, {
+      if (!pdf.base64) throw new Error('تعذر تجهيز ملف PDF.');
+      const file = new File(Paths.cache, `تقرير-العمارة-${Date.now()}.pdf`);
+      file.create({ intermediates: true, overwrite: true });
+      await file.write(pdf.base64, { encoding: 'base64' });
+      await Sharing.shareAsync(file.uri, {
         mimeType: 'application/pdf',
         UTI: 'com.adobe.pdf',
         dialogTitle: 'مشاركة تقرير العمارة',
@@ -132,7 +166,8 @@ export default function ExportBackupScreen() {
     try {
       const report = await getReportData(currentPeriod());
       const bytes = writeReportWorkbook(report);
-      const file = new File(Paths.cache, `تقرير-العمارة-${Date.now()}.xlsx`);
+      const label = periodFileLabel(periodKind, month, year);
+      const file = new File(Paths.cache, `تقرير-العمارة-${label}.xlsx`);
       file.create({ intermediates: true, overwrite: true });
       await file.write(bytes);
       await Sharing.shareAsync(file.uri, {
@@ -162,6 +197,7 @@ export default function ExportBackupScreen() {
         dialogTitle: 'حفظ نسخة احتياطية من بيانات العمارة',
       });
       await setSetting('last_backup_at', new Date().toISOString());
+      await scheduleBackupReminders().catch(() => undefined);
       setNotice('تم تجهيز النسخة الاحتياطية وفتح قائمة المشاركة.');
     } catch (backupError) {
       reportFailure('Backup creation failed', backupError, 'تعذر إنشاء النسخة الاحتياطية.');
@@ -176,20 +212,9 @@ export default function ExportBackupScreen() {
     setErrorDetail(null);
     setNotice(null);
     try {
-      const result = await getDocumentAsync({
-        type: ['application/json', 'text/plain', '*/*'],
-        copyToCacheDirectory: true,
-        multiple: false,
-      });
-      if (result.canceled) return;
-      const asset = result.assets[0];
-      if (!asset) throw new Error('لم يتم اختيار ملف.');
-      let contents: string;
-      try {
-        contents = await new File(asset.uri).text();
-      } catch (readError) {
-        throw new Error('تعذر قراءة الملف من الجهاز.', { cause: readError });
-      }
+      const picked = await File.pickFileAsync({ mimeTypes: ['*/*'] });
+      if (picked.canceled || !picked.result) return;
+      const contents = await readPickedFile(picked.result.uri);
       let parsed: unknown;
       try {
         parsed = JSON.parse(contents.replace(/^\uFEFF/, '')) as unknown;
@@ -210,11 +235,13 @@ export default function ExportBackupScreen() {
     setBusy(true);
     setError(null);
     setErrorDetail(null);
+    setNotice(null);
     try {
       await restoreDatabaseBackup(pendingBackup);
       setPendingBackup(null);
       router.replace({ pathname: '/(tabs)', params: { restored: String(Date.now()) } });
     } catch (restoreError) {
+      setPendingBackup(null);
       reportFailure('Backup restore failed', restoreError, 'تعذرت استعادة النسخة. لم يتم تغيير البيانات.');
     } finally {
       setBusy(false);

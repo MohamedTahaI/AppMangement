@@ -1,7 +1,10 @@
 import { AppText } from '@/components/ui/AppText';
+import { Section } from '@/components/ui/Section';
+import { Screen } from '@/components/ui/Screen';
+import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { listExpenseCategories, listExpenses, type Expense, type ExpenseCategory } from '@/db/expenses';
 import { getDatabase } from '@/db/schema';
@@ -9,12 +12,12 @@ import { getDashboardTotals, getMonthlyApartmentRows, type MonthlyApartmentRow }
 import { listSpecialCollectionSummaries, type SpecialCollectionSummary } from '@/services/specialCollections';
 import { MonthPicker, getCurrentMonth, getMonthLabel } from '@/components/ui/MonthPicker';
 import { MonthTransition } from '@/components/ui/MonthTransition';
-import { ScreenHeader } from '@/components/ui/ScreenHeader';
-import { formatDate } from '@/services/dateFormat';
+import { ActivityRow } from '@/components/ui/ActivityRow';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { MoneyText } from '@/components/ui/MoneyText';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { StatCard } from '@/components/ui/StatCard';
 import { arabicErrorMessage } from '@/services/errors';
 import { theme } from '@/theme';
 
@@ -84,12 +87,12 @@ export default function MonthStatementScreen() {
       setApartments(apartmentRows);
       setExpenses(monthExpenses);
       setCategories(categoryRows);
-      setSpecials(specialRows.filter((item) => item.date.slice(0, 7) === month));
+      setSpecials(specialRows);
       setPayments(paymentRows);
       setAdjustments(adjustmentRows);
       setError(null);
     } catch (loadError) {
-      setError(arabicErrorMessage(loadError, 'تعذر إعداد كشف الشهر.'));
+      setError(arabicErrorMessage(loadError, 'تعذر تحميل كشف الشهر. حاول مرة أخرى.'));
     } finally {
       setLoading(false);
     }
@@ -101,69 +104,94 @@ export default function MonthStatementScreen() {
 
   const paidApartments = apartments.filter((row) => row.summary.status === 'paid').length;
   const categoryName = (id: number) => categories.find((item) => item.id === id)?.name ?? 'مصروف';
+  const net = totals.monthCollected - totals.monthExpenses + totals.monthAdjustments;
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <Screen>
       <ScreenHeader title="كشف الشهر" subtitle="ملخص التحصيل والمصروفات والعمليات" />
       <MonthPicker month={month} onChange={setMonth} />
       <MonthTransition month={month}>
-      {error ? <AppText style={styles.error}>{error}</AppText> : null}
-      {loading ? <><Skeleton height={theme.sizes.skeletonRow} /><Skeleton height={theme.sizes.skeletonRow} /></> : null}
-      {!loading ? (
-        <>
-          <View style={styles.summaryGrid}>
-            <Card variant="surface" style={styles.summaryCard}><AppText style={styles.label}>التحصيل</AppText><MoneyText amount={totals.monthCollected} /></Card>
-            <Card variant="surface" style={styles.summaryCard}><AppText style={styles.label}>المصروفات</AppText><MoneyText amount={totals.monthExpenses} /></Card>
-            <Card variant="surface" style={styles.summaryCard}><AppText style={styles.label}>الصافي</AppText><MoneyText amount={totals.monthCollected - totals.monthExpenses + totals.monthAdjustments} /></Card>
-            <Card variant="surface" style={styles.summaryCard}><AppText style={styles.label}>الشقق المدفوعة</AppText><AppText style={styles.count}>{paidApartments} من {apartments.length}</AppText></Card>
-          </View>
-          <Card style={styles.row}><AppText style={styles.label}>تعديلات الرصيد</AppText><MoneyText amount={totals.monthAdjustments} /></Card>
-          <AppText style={styles.section}>التحصيلات الخاصة لهذا الشهر</AppText>
-          {specials.length === 0 ? <EmptyState message="لا توجد تحصيلات خاصة في هذا الشهر." /> : null}
-          {specials.map((special) => <Card key={special.id} style={styles.row}><AppText style={styles.itemTitle}>{special.title}</AppText><MoneyText amount={special.totalCollected} /></Card>)}
-          <AppText style={styles.section}>دفعات الشهر</AppText>
-          {payments.length === 0 ? <EmptyState message={`لا توجد دفعات مسجلة في ${getMonthLabel(month)}.`} /> : null}
-          {payments.map((payment) => (
-            <Pressable key={payment.id} onPress={() => router.push({ pathname: '/apartment-account/[id]', params: { id: String(payment.apartment_id) } })}>
-              <Card style={styles.row}>
-                <View style={styles.detail}>
-                  <AppText style={styles.itemTitle}>شقة {payment.apartment_number} — {payment.month ? getMonthLabel(payment.month) : payment.special_title}</AppText>
-                  <AppText style={styles.meta}>{formatDate(payment.paid_date)}{payment.note ? ` · ${payment.note}` : ''}</AppText>
-                </View>
-                <MoneyText amount={payment.amount} size={theme.typography.section} />
-              </Card>
-            </Pressable>
-          ))}
-          <AppText style={styles.section}>مصروفات الشهر</AppText>
-          {expenses.length === 0 ? <EmptyState message="لا توجد مصروفات مسجلة في هذا الشهر." /> : null}
-          {expenses.map((expense) => <Card key={expense.id} style={styles.row}><View style={styles.detail}><AppText style={styles.itemTitle}>{categoryName(expense.category_id)}</AppText><AppText style={styles.meta}>{formatDate(expense.expense_date)}{expense.note ? ` · ${expense.note}` : ''}</AppText></View><MoneyText amount={expense.amount} size={theme.typography.section} /></Card>)}
-          {adjustments.length ? <AppText style={styles.section}>تعديلات الرصيد</AppText> : null}
-          {adjustments.map((adjustment) => (
-            <Card key={adjustment.id} style={styles.row}>
-              <View style={styles.detail}>
-                <AppText style={styles.itemTitle}>{adjustment.status === 'cancelled' ? 'ملغية' : adjustment.type === 'increase' ? 'زيادة' : 'نقص'} — {adjustment.reason}</AppText>
-                <AppText style={styles.meta}>{formatDate(adjustment.adjustment_date)}</AppText>
-              </View>
-              <MoneyText amount={adjustment.type === 'decrease' ? -adjustment.amount : adjustment.amount} size={theme.typography.section} />
+        {error ? <AppText style={styles.error}>{error}</AppText> : null}
+        {loading ? <><Skeleton height={theme.sizes.skeletonRow} /><Skeleton height={theme.sizes.skeletonRow} /></> : null}
+        {!loading ? (
+          <>
+            <View style={styles.summaryGrid}>
+              <StatCard title="التحصيل" amount={totals.monthCollected} icon="payments" amountSize={28} labelSize={15} />
+              <StatCard title="المصروفات" amount={totals.monthExpenses} icon="receipt-long" amountSize={28} labelSize={15} />
+              <StatCard title="الصافي" amount={net} icon="trending-up" amountSize={28} labelSize={15} />
+              <StatCard title="الشقق المدفوعة" value={`${paidApartments} من ${apartments.length}`} icon="check-circle" amountSize={28} labelSize={15} />
+            </View>
+            <Card variant="surface" style={styles.adjustmentsCard}>
+              <AppText style={styles.adjustmentsLabel}>تعديلات الرصيد</AppText>
+              <MoneyText amount={totals.monthAdjustments} size={28} />
             </Card>
-          ))}
-        </>
-      ) : null}
+            <Section title="التحصيلات الخاصة لهذا الشهر">
+              {specials.length === 0 ? <EmptyState message="لا توجد تحصيلات خاصة في هذا الشهر." /> : null}
+              {specials.map((special) => (
+                <Card key={special.id} style={styles.specialRow}>
+                  <AppText style={styles.itemTitle}>{special.title}</AppText>
+                  <MoneyText amount={special.totalCollected} size={28} />
+                </Card>
+              ))}
+            </Section>
+            <Section title="دفعات الشهر">
+              {payments.length === 0 ? <EmptyState message={`لا توجد دفعات مسجلة في ${getMonthLabel(month)}.`} /> : null}
+              {payments.map((payment) => (
+                <ActivityRow
+                  key={payment.id}
+                  type="payment"
+                  title={`شقة ${payment.apartment_number} — ${payment.month ? getMonthLabel(payment.month) : payment.special_title ?? ''}`}
+                  date={payment.paid_date}
+                  note={payment.note}
+                  amount={payment.amount}
+                  onPress={() => router.push({ pathname: '/apartment-account/[id]', params: { id: String(payment.apartment_id) } })}
+                />
+              ))}
+            </Section>
+            <Section title="مصروفات الشهر">
+              {expenses.length === 0 ? <EmptyState message="لا توجد مصروفات مسجلة في هذا الشهر." /> : null}
+              {expenses.map((expense) => (
+                <ActivityRow
+                  key={expense.id}
+                  type="expense"
+                  title={categoryName(expense.category_id)}
+                  date={expense.expense_date}
+                  note={expense.note}
+                  amount={-expense.amount}
+                />
+              ))}
+            </Section>
+            {adjustments.length ? (
+              <Section title="تعديلات الرصيد">
+                {adjustments.map((adjustment) => (
+                  <ActivityRow
+                    key={adjustment.id}
+                    type="adjustment"
+                    title={
+                      adjustment.status === 'cancelled'
+                        ? 'ملغية'
+                        : adjustment.type === 'increase'
+                          ? `زيادة — ${adjustment.reason}`
+                          : `نقص — ${adjustment.reason}`
+                    }
+                    date={adjustment.adjustment_date}
+                    amount={adjustment.type === 'decrease' ? -adjustment.amount : adjustment.amount}
+                  />
+                ))}
+              </Section>
+            ) : null}
+          </>
+        ) : null}
       </MonthTransition>
-    </ScrollView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flexGrow: 1, padding: theme.spacingScale.screen, gap: theme.spacingScale.sm, paddingBottom: theme.spacingScale.lg, backgroundColor: theme.colors.background, writingDirection: 'rtl' },
   error: { color: theme.colors.danger, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'auto' },
-  summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacingScale.xs },
-  summaryCard: { width: theme.sizes.summaryCardWidth, minHeight: theme.sizes.statCard, justifyContent: 'center', alignItems: 'flex-end' },
-  label: { color: theme.colors.secondaryText, fontSize: theme.typography.small, fontFamily: theme.typography.bold, textAlign: 'auto' },
-  count: { color: theme.colors.text, fontSize: theme.typography.heading, fontFamily: theme.typography.extraBold },
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacingScale.xs },
-  detail: { flex: 1, alignItems: 'flex-end', gap: theme.spacingScale.xs },
+  summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacingScale.cardGap },
+  adjustmentsCard: { flexDirection: 'row', direction: 'rtl', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacingScale.xs },
+  adjustmentsLabel: { color: theme.colors.text, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'auto' },
+  specialRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacingScale.xs },
   itemTitle: { color: theme.colors.text, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'auto' },
-  meta: { color: theme.colors.secondaryText, fontSize: theme.typography.small, fontFamily: theme.typography.fontFamily, textAlign: 'auto' },
-  section: { color: theme.colors.text, fontSize: theme.typography.section, fontFamily: theme.typography.extraBold, textAlign: 'auto' },
 });

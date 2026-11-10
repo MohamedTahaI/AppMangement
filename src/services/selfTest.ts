@@ -15,7 +15,8 @@ import { createDatabaseBackup, restoreDatabaseBackup } from './backup';
 import { getReportData } from './reportData';
 import { buildReportWorkbook, writeReportWorkbook } from './reportExcel';
 import { buildReportPdfHtml } from './reportPdf';
-import { buildSheetRows } from './sheetRows';
+import { buildReportTables } from './reportTables';
+import { buildSheetSnapshot, buildSheetSyncPayload, findPendingChanges, snapshotSyncState } from './sheetRows';
 import { unzipSync, strFromU8 } from 'fflate';
 
 export interface SelfTestResult {
@@ -159,8 +160,11 @@ export async function runSelfTest(): Promise<SelfTestResult[]> {
         const pdfHtml = buildReportPdfHtml(report);
         const workbook = buildReportWorkbook(report);
         const workbookFiles = unzipSync(writeReportWorkbook(report));
-        const sheetSnapshot = buildSheetRows(report);
+        const sheetSnapshot = buildSheetSnapshot(report);
         const summarySheet = workbook.Sheets['الملخص'];
+        const summaryTab = sheetSnapshot.tabs.find((tab) => tab.key === 'summary');
+        const summaryValue = (key: string) =>
+          Number(summaryTab?.rows.find((row) => row.key === `summary:${key}`)?.values[1] ?? NaN);
         const excelTotals = [
           Number(summarySheet?.B4?.v ?? NaN),
           Number(summarySheet?.B5?.v ?? NaN),
@@ -184,29 +188,83 @@ export async function runSelfTest(): Promise<SelfTestResult[]> {
           'بعض إجماليات PDF غير موجودة في التقرير.',
         );
         assert(
-          sheetSnapshot.summary.collectedFromPayments === report.summary.collected,
+          sheetSnapshot.tabs.length === 11,
+          'عدد جداول الجدول الأونلاين لا يساوي 11.',
+        );
+        assert(
+          summaryValue('collected') === report.summary.collected,
           'إجمالي التحصيل في الجدول لا يطابق التقرير.',
         );
         assert(
-          sheetSnapshot.summary.specialCollectionsCollected === report.summary.specialCollected
-            && sheetSnapshot.summary.netAdjustments === report.summary.adjustments
-            && sheetSnapshot.summary.totalExpenses === report.summary.totalExpenses,
+          summaryValue('special') === report.summary.specialCollected
+            && summaryValue('adjustments') === report.summary.adjustments
+            && summaryValue('expenses') === report.summary.totalExpenses
+            && summaryValue('balance') === report.summary.balance,
           'إجماليات الجدول لا تطابق بيانات التقرير.',
         );
         assert(
-          sheetSnapshot.summary.balance === report.summary.balance,
-          'الرصيد في الجدول لا يطابق التقرير.',
-        );
-        assert(
-          sheetSnapshot.apartments.length === report.activeApartments.length,
-          'قائمة الشقق النشطة في الجدول غير مكتملة.',
+          sheetSnapshot.tabs.find((tab) => tab.key === 'apartmentStatus')?.rows.length === report.apartments.length,
+          'قائمة الشقق في الجدول غير مكتملة.',
         );
         const generatedSheets = Object.keys(workbookFiles)
           .filter((path) => /^xl\/worksheets\/sheet\d+\.xml$/.test(path))
           .map((path) => strFromU8(workbookFiles[path]));
         assert(
-          generatedSheets.length === 8 && generatedSheets.every((xml) => xml.includes('rightToLeft="1"') && xml.includes('state="frozen"')),
+          generatedSheets.length === 11 && generatedSheets.every((xml) => xml.includes('rightToLeft="1"') && xml.includes('state="frozen"')),
           'اتجاه RTL أو تجميد صف العناوين غير موجود في ملف Excel.',
+        );
+        const savedState = new Map(
+          snapshotSyncState(sheetSnapshot).reduce((byTab, row) => {
+            const rows = byTab.get(row.tabKey) ?? new Map<string, string>();
+            rows.set(row.rowKey, row.hash);
+            byTab.set(row.tabKey, rows);
+            return byTab;
+          }, new Map<string, Map<string, string>>()),
+        );
+        assert(findPendingChanges(sheetSnapshot, savedState).count === 0, 'الجدول يعتبر كل الصفوف تغييرات جديدة.');
+        const changedSnapshot = {
+          ...sheetSnapshot,
+          tabs: sheetSnapshot.tabs.map((tab) =>
+            tab.key === 'summary'
+              ? { ...tab, rows: tab.rows.map((row) => (row.key === 'summary:balance' ? { ...row, hash: 'changed' } : row)) }
+              : tab,
+          ),
+        };
+        assert(findPendingChanges(changedSnapshot, savedState).count === 1, 'لم يكتشف التغيير الواحد في الجدول.');
+        const cloneState = () => new Map(
+          [...savedState].map(([tabKey, rows]) => [tabKey, new Map(rows)] as const),
+        );
+        const changeState = (count: number) => {
+          const state = cloneState();
+          for (const change of snapshotSyncState(sheetSnapshot).slice(0, count)) {
+            state.get(change.tabKey)?.set(change.rowKey, 'changed');
+          }
+          return state;
+        };
+        for (const count of [3, 2]) {
+          const state = changeState(count);
+          assert(
+            findPendingChanges(sheetSnapshot, state).count === count,
+            `عدد التغييرات المعلقة لا يساوي ${count}.`,
+          );
+          const payload = buildSheetSyncPayload(sheetSnapshot, state, sheetSnapshot.revision, false);
+          const sentRows = payload.tabs.reduce(
+            (sum, tab) => sum + tab.rows.length + tab.deletedKeys.length,
+            0,
+          );
+          assert(sentRows === count, `أرسلت المزامنة ${sentRows} صفاً بدلاً من ${count}.`);
+        }
+        const reportTables = buildReportTables(report);
+        const monthsTable = reportTables.find((table) => table.key === 'months');
+        assert(
+          Boolean(monthsTable?.rows.some((tableRow) => tableRow.fills?.some(Boolean))),
+          'ألوان حالات الدفع غير موجودة في جدول الأشهر.',
+        );
+        const monthlyTable = reportTables.find((table) => table.key === 'monthlySummary');
+        assert(
+          monthlyTable?.headers.length === 6
+            && monthlyTable.rows.every((tableRow) => tableRow.values.length === 6),
+          'جدول ملخص كل شهر لا يحتوي الأعمدة الستة المطلوبة.',
         );
         assert(
           strFromU8(workbookFiles['xl/styles.xml']).includes('<b'),

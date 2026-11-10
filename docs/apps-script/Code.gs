@@ -1,323 +1,237 @@
 const SECRET = 'CHANGE_ME';
 
+var SCHEMA_VERSION = 3;
+var KEY_HEADER = '__key__';
+var TOTAL_KEY = 'TOTAL';
+
+var OLD_TAB_NAMES = [
+  'ملخص',
+  'ملخص كل شهر',
+  'حالة الشقق',
+  'التحصيلات الخاصة',
+  'المصروفات',
+  'سجل المدفوعات',
+  'الشقق',
+  'تعديل الرصيد',
+];
+
+var COLORS = {
+  header: '#D9EAF7',
+  total: '#EEF6FB',
+};
+
 /**
- * Expected POST JSON:
+ * Expected POST JSON (v3):
  * {
  *   "secret": "the same secret configured in the app",
  *   "action": "ping" | "sync",
  *   "data": {
- *     "schemaVersion": 2,
- *     "summary": {
- *       "buildingName": "Building name",
- *       "generatedAt": "2026-11-09T12:00:00.000Z",
- *       "collectedFromPayments": 1200,
- *       "netAdjustments": 200,
- *       "totalCollected": 1400,
- *       "totalExpenses": 300,
- *       "balance": 900
- *     },
- *     "monthlySummary": [
- *       { "month": "2026-11", "collected": 800, "expenses": 200 }
- *     ],
- *     "apartmentStatus": [
- *       { "number": "1", "ownerName": "Owner", "due": 400, "paid": 400,
- *         "remaining": 0, "status": "مدفوع", "monthsPaid": "2026-11" }
- *     ],
- *     "monthlyMatrix": [
+ *     "schemaVersion": 3,
+ *     "revision": "client revision",
+ *     "baseRevision": "last revision stored on the phone",
+ *     "full": false,
+ *     "generatedAt": "2026-11-09T12:00:00.000Z",
+ *     "buildingName": "Building name",
+ *     "tabs": [
  *       {
- *         "year": 2026,
- *         "apartments": [
- *           {
- *             "number": "1",
- *             "ownerName": "Owner",
- *             "months": {
- *               "01": { "paid": 400, "due": 400, "status": "مدفوع" },
- *               "02": { "paid": 200, "due": 400, "status": "جزئي" },
- *               "03": { "paid": 0, "due": 400, "status": "لم يدفع" }
- *             },
- *             "totalPaid": 600,
- *             "totalRemaining": 600
- *           }
- *         ]
- *       }
- *     ],
- *     "specialCollections": [
- *       {
- *         "id": 7,
- *         "title": "Elevator repair",
- *         "apartments": [
- *           {
- *             "number": "1", "ownerName": "Owner", "due": 500,
- *             "paid": 250, "remaining": 250, "status": "جزئي"
- *           }
- *         ]
- *       }
- *     ],
- *     "expenses": [
- *       {
- *         "date": "2026-11-09", "category": "Maintenance", "amount": 200,
- *         "note": "Note", "linkedCollection": "Elevator repair"
- *       }
- *     ],
- *     "payments": [
- *       {
- *         "date": "2026-11-09", "apartmentNumber": "1", "ownerName": "Owner",
- *         "type": "اشتراك شهري", "monthOrCollection": "2026-11", "amount": 400
- *       }
- *     ],
- *     "apartments": [{ "number": "1", "ownerName": "Owner" }],
- *     "adjustments": [
- *       {
- *         "date": "2026-11-09", "type": "زيادة", "amount": 200,
- *         "reason": "تصحيح رصيد سابق", "status": "سارية", "cancelReason": ""
+ *         "key": "payments",
+ *         "name": "الدفعات",
+ *         "headers": ["التاريخ", "..."],
+ *         "keys": ["pay:1"],
+ *         "rows": [["2026-11-09", "..."]],
+ *         "deletedKeys": [],
+ *         "hasFilter": true,
+ *         "moneyColumns": [5],
+ *         "totalColumns": [5]
  *       }
  *     ]
  *   }
  * }
+ *
+ * The first column is a hidden key column. Do not edit or delete it.
  */
-
-const TAB_NAMES = {
-  summary: 'ملخص',
-  monthlySummary: 'ملخص كل شهر',
-  apartmentStatus: 'حالة الشقق',
-  specialCollections: 'التحصيلات الخاصة',
-  expenses: 'المصروفات',
-  payments: 'سجل المدفوعات',
-  apartments: 'الشقق',
-  adjustments: 'تعديل الرصيد',
-};
-
-const COLORS = {
-  header: '#D9EAF7',
-  paid: '#D9EAD3',
-  partial: '#FCE5CD',
-  unpaid: '#F4CCCC',
-  blank: '#FFFFFF',
-};
 
 function doPost(e) {
   try {
     if (!e || !e.postData || typeof e.postData.contents !== 'string') {
-      return jsonResponse_({ ok: false, error: 'بيانات الطلب غير موجودة.' });
+      throw fail_('bad_request', 'بيانات الطلب غير موجودة.');
     }
-
-    const request = JSON.parse(e.postData.contents);
+    var request = JSON.parse(e.postData.contents);
     if (!request || request.secret !== SECRET) {
-      return jsonResponse_({ ok: false, error: 'رمز الاتصال غير صحيح.' });
+      throw fail_('bad_secret', 'رمز الاتصال غير صحيح.');
     }
     if (request.action === 'ping') {
-      return jsonResponse_({ ok: true });
+      return jsonResponse_(ping_());
     }
     if (request.action !== 'sync') {
-      return jsonResponse_({ ok: false, error: 'نوع الطلب غير مدعوم.' });
+      throw fail_('bad_action', 'نوع الطلب غير مدعوم.');
     }
 
-    validateSnapshot_(request.data);
-    const lock = LockService.getScriptLock();
+    validatePayload_(request.data);
+    var lock = LockService.getScriptLock();
     if (!lock.tryLock(25000)) {
-      return jsonResponse_({ ok: false, error: 'الجدول مشغول، حاول مرة أخرى.' });
+      throw fail_('busy', 'الجدول مشغول، حاول مرة أخرى.');
     }
     try {
-      writeSnapshot_(request.data);
+      var result = writePayload_(request.data);
+      return jsonResponse_({
+        ok: true,
+        revision: result.revision,
+        schemaVersion: result.schemaVersion,
+        rowCounts: result.rowCounts,
+      });
     } finally {
       lock.releaseLock();
     }
-    return jsonResponse_({ ok: true });
   } catch (error) {
     return jsonResponse_({
       ok: false,
+      code: error && error.code ? String(error.code) : 'server_error',
       error: error && error.message ? String(error.message) : 'تعذر تحديث الجدول.',
     });
   }
 }
 
-function testWithSampleData() {
-  const sample = {
-    summary: {
-      buildingName: 'عمارة النخيل',
-      generatedAt: new Date().toISOString(),
-      totalCollected: 2400,
-      collectedFromPayments: 2200,
-      netAdjustments: 200,
-      totalExpenses: 650,
-      balance: 1750,
-    },
-    schemaVersion: 2,
-    monthlySummary: [
-      { month: '2026-10', collected: 1200, expenses: 250 },
-      { month: '2026-11', collected: 1200, expenses: 400 },
-    ],
-    apartmentStatus: [
-      { number: '1', ownerName: 'أحمد', due: 400, paid: 400, remaining: 0, status: 'مدفوع', monthsPaid: '2026-10' },
-      { number: '2', ownerName: 'سارة', due: 400, paid: 0, remaining: 400, status: 'لم يدفع', monthsPaid: '' },
-    ],
-    expensesByCategory: [
-      { category: 'صيانة', total: 400 },
-      { category: 'الكهرباء', total: 250 },
-    ],
-    monthlyMatrix: [
-      {
-        year: 2026,
-        apartments: [
-          {
-            number: '1',
-            ownerName: 'أحمد',
-            months: {
-              '10': { paid: 400, due: 400, status: 'مدفوع' },
-              '11': { paid: 200, due: 400, status: 'جزئي' },
-            },
-            totalPaid: 600,
-            totalRemaining: 200,
-          },
-          {
-            number: '2',
-            ownerName: 'سارة',
-            months: {
-              '10': { paid: 0, due: 400, status: 'لم يدفع' },
-            },
-            totalPaid: 0,
-            totalRemaining: 400,
-          },
-        ],
-      },
-    ],
-    specialCollections: [
-      {
-        id: 7,
-        title: 'صيانة المصعد',
-        apartments: [
-          { number: '1', ownerName: 'أحمد', due: 500, paid: 500, remaining: 0, status: 'مدفوع' },
-          { number: '2', ownerName: 'سارة', due: 500, paid: 250, remaining: 250, status: 'جزئي' },
-        ],
-      },
-    ],
-    expenses: [
-      {
-        date: '2026-11-05',
-        category: 'صيانة',
-        amount: 400,
-        note: 'إصلاح المصعد',
-        linkedCollection: 'صيانة المصعد',
-      },
-      {
-        date: '2026-11-01',
-        category: 'الكهرباء',
-        amount: 250,
-        note: '',
-        linkedCollection: '',
-      },
-    ],
-    payments: [
-      {
-        date: '2026-11-03',
-        apartmentNumber: '1',
-        ownerName: 'أحمد',
-        type: 'اشتراك شهري',
-        monthOrCollection: '2026-11',
-        amount: 200,
-      },
-      {
-        date: '2026-11-04',
-        apartmentNumber: '2',
-        ownerName: 'سارة',
-        type: 'تحصيل خاص',
-        monthOrCollection: 'صيانة المصعد',
-        amount: 250,
-      },
-    ],
-    apartments: [
-      { number: '1', ownerName: 'أحمد' },
-      { number: '2', ownerName: 'سارة' },
-    ],
-    adjustments: [
-      {
-        date: '2026-11-02',
-        type: 'زيادة',
-        amount: 200,
-        reason: 'تصحيح رصيد سابق',
-        status: 'سارية',
-        cancelReason: '',
-      },
-    ],
+function ping_() {
+  var properties = PropertiesService.getScriptProperties();
+  var schemaVersion = Number(properties.getProperty('schemaVersion')) || 0;
+  var revision = properties.getProperty('revision') || '';
+  var rowCounts = {};
+  try {
+    rowCounts = JSON.parse(properties.getProperty('rowCounts') || '{}');
+  } catch (error) {
+    rowCounts = {};
+  }
+  return {
+    ok: true,
+    schemaVersion: schemaVersion,
+    revision: revision,
+    rowCounts: rowCounts,
   };
-  writeSnapshot_(sample);
 }
 
-function jsonResponse_(value) {
-  return ContentService
-    .createTextOutput(JSON.stringify(value))
-    .setMimeType(ContentService.MimeType.JSON);
-}
+function writePayload_(data) {
+  var properties = PropertiesService.getScriptProperties();
+  var storedSchema = Number(properties.getProperty('schemaVersion')) || 0;
+  var storedRevision = properties.getProperty('revision') || '';
+  var full = Boolean(data.full);
 
-function validateSnapshot_(data) {
-  const requiredArrays = [
-    'monthlySummary',
-    'monthlyMatrix',
-    'apartmentStatus',
-    'expensesByCategory',
-    'specialCollections',
-    'expenses',
-    'payments',
-    'apartments',
-    'adjustments',
-  ];
-  if (!data || typeof data !== 'object' || !data.summary || typeof data.summary !== 'object') {
-    throw new Error('بيانات الملخص غير صالحة.');
-  }
-  requiredArrays.forEach(function (key) {
-    if (!Array.isArray(data[key])) throw new Error('قائمة البيانات غير صالحة: ' + key);
-  });
-  if (
-    Number(data.schemaVersion) !== 2 ||
-    typeof data.summary.buildingName !== 'string' ||
-    typeof data.summary.generatedAt !== 'string' ||
-    !isFinite(Number(data.summary.totalCollected)) ||
-    !isFinite(Number(data.summary.totalExpenses)) ||
-    !isFinite(Number(data.summary.balance))
-  ) {
-    throw new Error('قيم الملخص غير مكتملة.');
-  }
-}
-
-function writeSnapshot_(data) {
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  const monthlyTabNames = data.monthlyMatrix.map(function (entry) {
-    return 'الفاتورة الشهرية ' + String(entry.year);
-  });
-  const managedNames = Object.keys(TAB_NAMES).map(function (key) {
-    return TAB_NAMES[key];
-  }).concat(monthlyTabNames);
-
-  Object.keys(TAB_NAMES).forEach(function (key) {
-    ensureSheet_(spreadsheet, TAB_NAMES[key]);
-  });
-  monthlyTabNames.forEach(function (name) {
-    ensureSheet_(spreadsheet, name);
-  });
-  spreadsheet.getSheets().forEach(function (sheet) {
-    if (/^الفاتورة الشهرية \d{4}$/.test(sheet.getName()) &&
-        managedNames.indexOf(sheet.getName()) === -1) {
-      spreadsheet.deleteSheet(sheet);
+  if (!full) {
+    if (storedSchema !== SCHEMA_VERSION) {
+      throw fail_('schema_mismatch', 'نسخة الجدول قديمة. ستتم إعادة بنائه بالكامل.');
     }
+    if (!storedRevision || data.baseRevision !== storedRevision) {
+      throw fail_('revision_mismatch', 'الجدول تغير من جهاز آخر. ستتم إعادة بناء البيانات المرسلة.');
+    }
+  }
+
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var rowCounts = {};
+
+  data.tabs.forEach(function (tab) {
+    var sheet = full
+      ? ensureSheet_(spreadsheet, tab.name)
+      : requiredSheet_(spreadsheet, tab.name);
+    if (full) {
+      resetSheet_(sheet, tab);
+    } else {
+      ensureHeader_(sheet, tab);
+    }
+    rowCounts[tab.key] = mergeTab_(sheet, tab);
   });
 
-  writeSummary_(spreadsheet.getSheetByName(TAB_NAMES.summary), data);
-  writeMonthlySummary_(spreadsheet.getSheetByName(TAB_NAMES.monthlySummary), data);
-  writeApartmentStatus_(spreadsheet.getSheetByName(TAB_NAMES.apartmentStatus), data);
-  writeSpecialCollections_(spreadsheet.getSheetByName(TAB_NAMES.specialCollections), data);
-  writeExpenses_(spreadsheet.getSheetByName(TAB_NAMES.expenses), data);
-  writePayments_(spreadsheet.getSheetByName(TAB_NAMES.payments), data);
-  writeApartments_(spreadsheet.getSheetByName(TAB_NAMES.apartments), data);
-  writeAdjustments_(spreadsheet.getSheetByName(TAB_NAMES.adjustments), data);
-  data.monthlyMatrix.forEach(function (yearData) {
-    writeMonthlyMatrix_(spreadsheet.getSheetByName('الفاتورة الشهرية ' + yearData.year), yearData);
+  if (full) cleanupOldTabs_(spreadsheet, data.tabs);
+
+  properties.setProperties({
+    revision: data.revision,
+    schemaVersion: String(SCHEMA_VERSION),
+    rowCounts: JSON.stringify(rowCounts),
+    updatedAt: new Date().toISOString(),
   });
+
+  return {
+    revision: data.revision,
+    schemaVersion: SCHEMA_VERSION,
+    rowCounts: rowCounts,
+  };
+}
+
+function validatePayload_(data) {
+  if (!data || typeof data !== 'object') {
+    throw fail_('bad_request', 'بيانات الجدول غير موجودة.');
+  }
+  if (Number(data.schemaVersion) !== SCHEMA_VERSION) {
+    throw fail_('schema_mismatch', 'نسخة البيانات غير متوافقة مع السكربت.');
+  }
+  if (typeof data.revision !== 'string' || !data.revision) {
+    throw fail_('bad_request', 'رقم مراجعة البيانات غير صالح.');
+  }
+  if (typeof data.baseRevision !== 'string') {
+    throw fail_('bad_request', 'رقم مراجعة الأساس غير صالح.');
+  }
+  if (!Array.isArray(data.tabs) || data.tabs.length === 0) {
+    throw fail_('bad_request', 'قائمة الجداول غير صالحة.');
+  }
+
+  var seenTabs = {};
+  data.tabs.forEach(function (tab) {
+    if (!tab || typeof tab.key !== 'string' || typeof tab.name !== 'string') {
+      throw fail_('bad_request', 'بيانات أحد الجداول غير صالحة.');
+    }
+    if (seenTabs[tab.key]) {
+      throw fail_('bad_request', 'تكرار في مفاتيح الجداول.');
+    }
+    seenTabs[tab.key] = true;
+    if (!Array.isArray(tab.headers) || !Array.isArray(tab.keys) || !Array.isArray(tab.rows)) {
+      throw fail_('bad_request', 'هيكل الجدول غير صالح: ' + tab.key);
+    }
+    if (tab.keys.length !== tab.rows.length) {
+      throw fail_('bad_request', 'عدد الصفوف لا يطابق المفاتيح: ' + tab.key);
+    }
+    if (tab.deletedKeys !== undefined && !Array.isArray(tab.deletedKeys)) {
+      throw fail_('bad_request', 'قائمة المحذوفات غير صالحة: ' + tab.key);
+    }
+    if (tab.fills !== undefined) {
+      if (!Array.isArray(tab.fills) || tab.fills.length !== tab.rows.length) {
+        throw fail_('bad_request', 'ألوان الصفوف غير صالحة: ' + tab.key);
+      }
+      tab.fills.forEach(function (rowFills) {
+        if (!Array.isArray(rowFills) || rowFills.length !== tab.headers.length) {
+          throw fail_('bad_request', 'عدد ألوان الصف لا يطابق الأعمدة: ' + tab.key);
+        }
+        rowFills.forEach(function (fill) {
+          if (fill !== null && !/^[0-9A-Fa-f]{6}$/.test(String(fill))) {
+            throw fail_('bad_request', 'قيمة لون غير صالحة: ' + tab.key);
+          }
+        });
+      });
+    }
+    var seenRows = {};
+    tab.rows.forEach(function (row, index) {
+      if (!Array.isArray(row) || row.length !== tab.headers.length) {
+        throw fail_('bad_request', 'أحد صفوف الجدول غير مكتمل: ' + tab.key);
+      }
+      var key = String(tab.keys[index]);
+      if (seenRows[key]) {
+        throw fail_('bad_request', 'تكرار في مفاتيح الصفوف: ' + tab.key);
+      }
+      seenRows[key] = true;
+    });
+  });
+}
+
+function requiredSheet_(spreadsheet, name) {
+  var sheet = spreadsheet.getSheetByName(name);
+  if (!sheet) {
+    throw fail_('sheet_damaged', 'ورقة مفقودة: ' + name);
+  }
+  return sheet;
 }
 
 function ensureSheet_(spreadsheet, name) {
-  const existing = spreadsheet.getSheetByName(name);
+  var existing = spreadsheet.getSheetByName(name);
   if (existing) return existing;
-  const firstSheet = spreadsheet.getSheets()[0];
+  var firstSheet = spreadsheet.getSheets()[0];
   if (
     firstSheet &&
     firstSheet.getName() === 'Sheet1' &&
@@ -330,30 +244,172 @@ function ensureSheet_(spreadsheet, name) {
   return spreadsheet.insertSheet(name);
 }
 
-function resetSheet_(sheet, headers, widths) {
-  const filter = sheet.getFilter();
-  if (filter) filter.remove();
-  sheet.clear();
-  sheet.setRightToLeft(true);
-  sheet.setFrozenRows(1);
-  const headerRange = sheet.getRange(1, 1, 1, headers.length);
-  headerRange.setValues([headers.map(safeCell_)]);
-  headerRange.setFontWeight('bold');
-  headerRange.setBackground(COLORS.header);
-  headerRange.setWrap(true);
-  headers.forEach(function (_, index) {
-    sheet.setColumnWidth(index + 1, widths[index] || 140);
+function cleanupOldTabs_(spreadsheet, tabs) {
+  var keep = {};
+  tabs.forEach(function (tab) {
+    keep[tab.name] = true;
+  });
+  spreadsheet.getSheets().forEach(function (sheet) {
+    var name = sheet.getName();
+    if (keep[name]) return;
+    var old = OLD_TAB_NAMES.indexOf(name) !== -1;
+    var oldMonthly = /^الفاتورة الشهرية \d{4}$/.test(name);
+    if ((old || oldMonthly) && spreadsheet.getSheets().length > 1) {
+      spreadsheet.deleteSheet(sheet);
+    }
   });
 }
 
-function appendRows_(sheet, rows, columnCount) {
-  if (rows.length === 0) return;
-  const values = rows.map(function (row) {
-    const padded = row.slice(0, columnCount);
-    while (padded.length < columnCount) padded.push('');
-    return padded.map(safeCell_);
+function resetSheet_(sheet, tab) {
+  var filter = sheet.getFilter();
+  if (filter) filter.remove();
+  sheet.getMergedRanges().forEach(function (range) {
+    range.breakApart();
   });
-  sheet.getRange(2, 1, values.length, columnCount).setValues(values);
+  sheet.clear();
+  sheet.setRightToLeft(true);
+  sheet.setFrozenRows(1);
+
+  var headers = [KEY_HEADER].concat(tab.headers);
+  var headerRange = sheet.getRange(1, 1, 1, headers.length);
+  headerRange.setValues([headers.map(safeCell_)]);
+  headerRange.setFontWeight('bold').setBackground(COLORS.header).setWrap(true);
+  sheet.setColumnWidth(1, 36);
+  sheet.hideColumns(1);
+}
+
+function ensureHeader_(sheet, tab) {
+  var expected = [KEY_HEADER].concat(tab.headers);
+  var current = sheet.getRange(1, 1, 1, expected.length).getValues()[0];
+  if (current.map(String).join('\u0001') !== expected.map(String).join('\u0001')) {
+    throw fail_('sheet_damaged', 'رأس الجدول تغير: ' + tab.name);
+  }
+  sheet.setRightToLeft(true);
+  sheet.setFrozenRows(1);
+  sheet.setColumnWidth(1, 36);
+  sheet.hideColumns(1);
+}
+
+function mergeTab_(sheet, tab) {
+  var columnCount = tab.headers.length + 1;
+  var lastRow = sheet.getLastRow();
+  var existingRows = lastRow > 1 ? sheet.getRange(2, 1, lastRow - 1, columnCount).getValues() : [];
+  var rowsByKey = new Map();
+  var fillsByKey = {};
+  if (tab.fills) {
+    tab.keys.forEach(function (key, index) {
+      fillsByKey[String(key)] = tab.fills[index];
+    });
+  }
+
+  existingRows.forEach(function (row) {
+    var key = String(row[0]);
+    if (!key || key === TOTAL_KEY) return;
+    rowsByKey.set(key, row.slice(1));
+  });
+
+  tab.keys.forEach(function (key, index) {
+    rowsByKey.set(String(key), tab.rows[index]);
+  });
+  (tab.deletedKeys || []).forEach(function (key) {
+    rowsByKey.delete(String(key));
+  });
+
+  if (lastRow > 1) {
+    sheet.getRange(2, 1, lastRow - 1, Math.max(sheet.getLastColumn(), columnCount)).clearContent();
+  }
+
+  var entries = Array.from(rowsByKey.entries());
+  if (entries.length > 0) {
+    var values = entries.map(function (entry) {
+      var row = entry[1].slice(0, tab.headers.length);
+      while (row.length < tab.headers.length) row.push('');
+      return [entry[0]].concat(row.map(safeCell_));
+    });
+    sheet.getRange(2, 1, values.length, columnCount).setValues(values);
+  }
+
+  if (lastRow > entries.length + 1) {
+    sheet
+      .getRange(entries.length + 2, 1, lastRow - entries.length - 1, Math.max(sheet.getLastColumn(), columnCount))
+      .clearFormat();
+  }
+
+  formatTab_(sheet, tab, entries);
+  applyFills_(sheet, tab, entries, fillsByKey);
+
+  var filter = sheet.getFilter();
+  if (tab.hasFilter && entries.length > 0) {
+    if (filter) filter.remove();
+    sheet.getRange(1, 1, entries.length + 1, columnCount).createFilter();
+  } else if (filter) {
+    filter.remove();
+  }
+
+  writeTotals_(sheet, tab, entries);
+  return entries.length;
+}
+
+function formatTab_(sheet, tab, entries) {
+  var columnCount = tab.headers.length + 1;
+  var headerRange = sheet.getRange(1, 1, 1, columnCount);
+  headerRange.setFontWeight('bold').setBackground(COLORS.header).setWrap(true);
+
+  tab.headers.forEach(function (header, index) {
+    var width = 90;
+    var maxChars = String(header).length;
+    entries.forEach(function (entry) {
+      maxChars = Math.max(maxChars, String(entry[1][index] === undefined ? '' : entry[1][index]).length);
+    });
+    width = Math.max(90, Math.min(260, maxChars * 8 + 24));
+    sheet.setColumnWidth(index + 2, width);
+    if (header === 'التاريخ' && entries.length > 0) {
+      sheet.getRange(2, index + 2, entries.length, 1).setNumberFormat('yyyy-mm-dd');
+    }
+  });
+
+  (tab.moneyColumns || []).forEach(function (index) {
+    if (entries.length > 0) {
+      sheet.getRange(2, index + 2, entries.length, 1).setNumberFormat('#,##0');
+    }
+  });
+}
+
+function applyFills_(sheet, tab, entries, fillsByKey) {
+  entries.forEach(function (entry, rowIndex) {
+    var fills = fillsByKey[String(entry[0])];
+    if (!fills) return;
+    for (var column = 0; column < fills.length; column += 1) {
+      var fill = fills[column];
+      sheet
+        .getRange(rowIndex + 2, column + 2, 1, 1)
+        .setBackground(fill ? '#' + String(fill).replace(/^#/, '') : null);
+    }
+  });
+}
+
+function writeTotals_(sheet, tab, entries) {
+  var totals = tab.totalColumns || [];
+  if (totals.length === 0) return;
+  var columns = tab.headers.length + 1;
+  var row = new Array(columns).fill('');
+  row[0] = TOTAL_KEY;
+  if (tab.headers.length > 0) row[1] = 'الإجمالي';
+  totals.forEach(function (index) {
+    var sum = 0;
+    entries.forEach(function (entry) {
+      var value = Number(entry[1][index]);
+      if (isFinite(value)) sum += value;
+    });
+    row[index + 1] = sum;
+  });
+  var totalsRow = entries.length + 2;
+  var range = sheet.getRange(totalsRow, 1, 1, columns);
+  range.setValues([row.map(safeCell_)]);
+  range.setFontWeight('bold').setBackground(COLORS.total);
+  totals.forEach(function (index) {
+    sheet.getRange(totalsRow, index + 2, 1, 1).setNumberFormat('#,##0');
+  });
 }
 
 function safeCell_(value) {
@@ -362,212 +418,83 @@ function safeCell_(value) {
   return /^[=+\-@\t\r]/.test(value) ? "'" + value : value;
 }
 
-function writeSummary_(sheet, data) {
-  resetSheet_(sheet, ['البيان', 'القيمة'], [220, 180]);
-  const summary = data.summary;
-  const rows = [
-    ['اسم العمارة', summary.buildingName],
-    ['آخر تحديث', summary.generatedAt],
-    ['المحصل من المدفوعات', summary.collectedFromPayments || 0],
-    ['صافي تعديلات الرصيد', summary.netAdjustments || 0],
-    ['إجمالي التحصيل', summary.totalCollected],
-    ['إجمالي المصروفات', summary.totalExpenses],
-    ['الرصيد', summary.balance],
-    ['', ''],
-    ['الشهر', 'التحصيل', 'المصروفات'],
+function jsonResponse_(value) {
+  return ContentService
+    .createTextOutput(JSON.stringify(value))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function fail_(code, message) {
+  var error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function sampleTab_(key, name, headers, rows, moneyColumns, totalColumns, hasFilter) {
+  return {
+    key: key,
+    name: name,
+    headers: headers,
+    keys: rows.map(function (_, index) { return 'sample:' + key + ':' + index; }),
+    rows: rows,
+    deletedKeys: [],
+    hasFilter: Boolean(hasFilter),
+    moneyColumns: moneyColumns || [],
+    totalColumns: totalColumns || [],
+  };
+}
+
+function testWithSampleData() {
+  var tabs = [
+    sampleTab_('summary', 'الملخص', ['البيان', 'القيمة'], [
+      ['اسم العمارة', 'عمارة النخيل'],
+      ['إجمالي التحصيل', 2400],
+      ['إجمالي المصروفات', 650],
+      ['الرصيد', 1750],
+    ], [1]),
+    sampleTab_('apartmentStatus', 'حالة الشقق', ['رقم الشقة', 'اسم المالك', 'المطلوب', 'المدفوع', 'المتبقي', 'الحالة', 'الشهور المدفوعة'], [
+      ['1', 'أحمد', 400, 400, 0, 'مدفوع', '2026-10'],
+      ['2', 'سارة', 400, 0, 400, 'لم يدفع', ''],
+    ], [2, 3, 4], [2, 3, 4], true),
+    sampleTab_('months', 'جدول الأشهر', ['السنة', 'رقم الشقة', 'اسم المالك', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', 'إجمالي المدفوع', 'إجمالي المتبقي'], [
+      [2026, '1', 'أحمد', 400, 400, 400, 400, 400, 400, 400, 400, 400, 400, 200, 0, 4400, 200],
+    ], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]),
+    sampleTab_('payments', 'الدفعات', ['التاريخ', 'رقم الشقة', 'اسم المالك', 'النوع', 'الشهر أو التحصيل', 'المبلغ', 'ملاحظة'], [
+      ['2026-11-03', '1', 'أحمد', 'اشتراك شهري', '2026-11', 200, ''],
+    ], [5], [5], true),
+    sampleTab_('specials', 'التحصيلات الخاصة', ['اسم التحصيل', 'التاريخ', 'المبلغ لكل شقة', 'عدد الشقق', 'المطلوب', 'المدفوع', 'المتبقي'], [
+      ['صيانة المصعد', '2026-11-01', 500, 2, 1000, 750, 250],
+    ], [2, 4, 5, 6], [4, 5, 6]),
+    sampleTab_('specialDetails', 'تفاصيل التحصيلات الخاصة', ['اسم التحصيل', 'التاريخ', 'المبلغ لكل شقة', 'رقم الشقة', 'اسم المالك', 'المطلوب', 'المدفوع', 'المتبقي', 'الحالة'], [
+      ['صيانة المصعد', '2026-11-01', 500, '1', 'أحمد', 500, 500, 0, 'مدفوع'],
+      ['صيانة المصعد', '2026-11-01', 500, '2', 'سارة', 500, 250, 250, 'جزئي'],
+    ], [2, 5, 6, 7], [5, 6, 7], true),
+    sampleTab_('expenses', 'المصروفات', ['التاريخ', 'النوع', 'المبلغ', 'ملاحظة', 'التحصيل المرتبط'], [
+      ['2026-11-05', 'صيانة', 400, 'إصلاح المصعد', 'صيانة المصعد'],
+    ], [2], [2], true),
+    sampleTab_('expensesByCategory', 'المصروفات حسب النوع', ['نوع المصروف', 'الإجمالي'], [
+      ['صيانة', 400],
+      ['الكهرباء', 250],
+    ], [1], [1]),
+    sampleTab_('adjustments', 'التعديلات', ['التاريخ', 'النوع', 'المبلغ', 'السبب', 'الحالة', 'سبب الإلغاء'], [
+      ['2026-11-02', 'زيادة', 200, 'تصحيح رصيد سابق', 'سارية', ''],
+    ], [2]),
+    sampleTab_('unpaid', 'المتأخرين', ['رقم الشقة', 'اسم المالك', 'الشهور غير المدفوعة', 'إجمالي المتبقي'], [
+      ['2', 'سارة', '2026-11', 400],
+    ], [3], [3]),
+    sampleTab_('monthlySummary', 'ملخص كل شهر', ['الشهر', 'التحصيل', 'المصروفات', 'الصافي'], [
+      ['2026-10', 1200, 250, 950],
+      ['2026-11', 1200, 400, 800],
+    ], [1, 2, 3], [1, 2, 3]),
   ];
-  const values = rows.concat(data.monthlySummary.map(function (item) {
-    return [item.month, item.collected, item.expenses];
-  }));
-  const safeValues = values.map(function (row) {
-    return row.map(safeCell_);
+
+  writePayload_({
+    schemaVersion: SCHEMA_VERSION,
+    revision: 'sample-' + Date.now(),
+    baseRevision: '',
+    full: true,
+    generatedAt: new Date().toISOString(),
+    buildingName: 'عمارة النخيل',
+    tabs: tabs,
   });
-  sheet.getRange(2, 1, safeValues.length, 3).setValues(
-    safeValues.map(function (row) {
-      while (row.length < 3) row.push('');
-      return row;
-    }),
-  );
-  sheet.getRange(10, 1, 1, 3).setFontWeight('bold').setBackground(COLORS.header);
-  sheet.setColumnWidth(3, 160);
-  sheet.getRange(4, 2, 5, 1).setNumberFormat('#,##0.## "ج"');
-  if (data.monthlySummary.length) {
-    sheet.getRange(11, 2, data.monthlySummary.length, 2).setNumberFormat('#,##0.## "ج"');
-  }
-}
-
-function writeMonthlyMatrix_(sheet, yearData) {
-  const headers = ['رقم الشقة', 'اسم المالك'];
-  for (let month = 1; month <= 12; month += 1) {
-    headers.push(('0' + month).slice(-2));
-  }
-  headers.push('إجمالي المدفوع', 'إجمالي المتبقي');
-  resetSheet_(sheet, headers, [110, 180].concat(Array(12).fill(100), [140, 140]));
-
-  const backgrounds = [];
-  const rows = yearData.apartments.map(function (apartment) {
-    const row = [apartment.number, apartment.ownerName];
-    const colors = [COLORS.blank, COLORS.blank];
-    for (let month = 1; month <= 12; month += 1) {
-      const monthData = apartment.months[String(month).padStart(2, '0')];
-      if (!monthData) {
-        row.push('');
-        colors.push(COLORS.blank);
-      } else {
-        row.push(Number(monthData.paid) || 0);
-        colors.push(statusColor_(monthData.status));
-      }
-    }
-    row.push(Number(apartment.totalPaid) || 0, Number(apartment.totalRemaining) || 0);
-    colors.push(COLORS.blank, COLORS.blank);
-    backgrounds.push(colors);
-    return row;
-  });
-  appendRows_(sheet, rows, headers.length);
-  if (rows.length) {
-    sheet.getRange(2, 1, rows.length, headers.length).setBackgrounds(backgrounds);
-    sheet.getRange(2, 3, rows.length, 12).setNumberFormat('#,##0.## "ج"');
-    sheet.getRange(2, 15, rows.length, 2).setNumberFormat('#,##0.## "ج"');
-  }
-}
-
-function statusColor_(status) {
-  if (status === 'مدفوع') return COLORS.paid;
-  if (status === 'جزئي') return COLORS.partial;
-  if (status === 'لم يدفع') return COLORS.unpaid;
-  return COLORS.blank;
-}
-
-function writeSpecialCollections_(sheet, data) {
-  const headers = ['التحصيل الخاص', 'التاريخ', 'لكل شقة', 'رقم الشقة', 'اسم المالك', 'المطلوب', 'المدفوع', 'المتبقي', 'الحالة'];
-  resetSheet_(sheet, headers, [190, 120, 120, 110, 180, 120, 120, 120, 110]);
-  const rows = [];
-  data.specialCollections.forEach(function (collection) {
-    (collection.apartments || []).forEach(function (apartment) {
-      rows.push([
-        collection.title,
-        collection.date,
-        collection.amountPerApartment,
-        apartment.number,
-        apartment.ownerName,
-        apartment.due,
-        apartment.paid,
-        apartment.remaining,
-        apartment.status,
-      ]);
-    });
-  });
-  appendRows_(sheet, rows, headers.length);
-  if (rows.length) {
-    sheet.getRange(2, 3, rows.length, 1).setNumberFormat('#,##0.## "ج"');
-    sheet.getRange(2, 6, rows.length, 3).setNumberFormat('#,##0.## "ج"');
-    sheet.getRange(1, 1, rows.length + 1, headers.length).createFilter();
-  }
-}
-
-function writeExpenses_(sheet, data) {
-  const headers = ['التاريخ', 'النوع', 'المبلغ', 'ملاحظة', 'التحصيل المرتبط'];
-  resetSheet_(sheet, headers, [120, 160, 120, 240, 190]);
-  appendRows_(sheet, data.expenses.map(function (item) {
-    return [item.date, item.category, item.amount, item.note, item.linkedCollection];
-  }), headers.length);
-  if (data.expenses.length) {
-    sheet.getRange(2, 3, data.expenses.length, 1).setNumberFormat('#,##0.## "ج"');
-    sheet.getRange(1, 1, data.expenses.length + 1, headers.length).createFilter();
-  }
-  const start = data.expenses.length + 3;
-  sheet.getRange(start, 1, 1, 2).setValues([['إجمالي المصروفات حسب النوع', 'المبلغ']]);
-  sheet.getRange(start, 1, 1, 2).setFontWeight('bold').setBackground(COLORS.header);
-  appendRowsAt_(sheet, data.expensesByCategory.map(function (item) {
-    return [item.category, item.total];
-  }), 2, start + 1);
-  if (data.expensesByCategory.length) {
-    sheet.getRange(start + 1, 2, data.expensesByCategory.length, 1).setNumberFormat('#,##0.## "ج"');
-  }
-}
-
-function writePayments_(sheet, data) {
-  const headers = ['التاريخ', 'رقم الشقة', 'اسم المالك', 'النوع', 'الشهر / التحصيل', 'المبلغ', 'ملاحظة'];
-  resetSheet_(sheet, headers, [120, 110, 180, 140, 190, 120, 240]);
-  appendRows_(sheet, data.payments.map(function (item) {
-    return [
-      item.date,
-      item.apartmentNumber,
-      item.ownerName,
-      item.type,
-      item.monthOrCollection,
-      item.amount,
-      item.note,
-    ];
-  }), headers.length);
-  if (data.payments.length) sheet.getRange(2, 6, data.payments.length, 1).setNumberFormat('#,##0.## "ج"');
-}
-
-function writeMonthlySummary_(sheet, data) {
-  const headers = ['الشهر', 'التحصيل', 'المصروفات'];
-  resetSheet_(sheet, headers, [140, 160, 160]);
-  appendRows_(sheet, data.monthlySummary.map(function (item) {
-    return [item.month, item.collected, item.expenses];
-  }), headers.length);
-  if (data.monthlySummary.length) {
-    sheet.getRange(2, 2, data.monthlySummary.length, 2).setNumberFormat('#,##0.## "ج"');
-    sheet.getRange(1, 1, data.monthlySummary.length + 1, headers.length).createFilter();
-  }
-}
-
-function writeApartmentStatus_(sheet, data) {
-  const headers = ['رقم الشقة', 'اسم المالك', 'المطلوب', 'المدفوع', 'المتبقي', 'الحالة', 'الشهور المدفوعة'];
-  resetSheet_(sheet, headers, [120, 180, 120, 120, 120, 110, 240]);
-  appendRows_(sheet, data.apartmentStatus.map(function (item) {
-    return [item.number, item.ownerName, item.due, item.paid, item.remaining, item.status, item.monthsPaid];
-  }), headers.length);
-  if (data.apartmentStatus.length) {
-    sheet.getRange(2, 3, data.apartmentStatus.length, 3).setNumberFormat('#,##0.## "ج"');
-    sheet.getRange(1, 1, data.apartmentStatus.length + 1, headers.length).createFilter();
-  }
-}
-
-function writeApartments_(sheet, data) {
-  const headers = ['رقم الشقة', 'اسم المالك'];
-  resetSheet_(sheet, headers, [140, 240]);
-  appendRows_(sheet, data.apartments.map(function (item) {
-    return [item.number, item.ownerName];
-  }), headers.length);
-}
-
-function writeAdjustments_(sheet, data) {
-  const headers = ['التاريخ', 'النوع', 'المبلغ', 'السبب', 'الحالة', 'سبب الإلغاء'];
-  const widths = [120, 100, 120, 280, 100, 240];
-  sheet.clear();
-  sheet.setRightToLeft(true);
-  sheet.setFrozenRows(3);
-  sheet.getRange(1, 1, 1, headers.length).merge();
-  sheet.getRange(1, 1).setValue('تعديل الرصيد');
-  sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground(COLORS.header);
-  sheet.getRange(2, 1, 1, headers.length).merge();
-  sheet.getRange(2, 1).setValue('استخدمها لو دخلت فلوس من بره العمارة، أو لتصحيح الرصيد، مع كتابة السبب');
-  sheet.getRange(2, 1, 1, headers.length).setWrap(true);
-  sheet.getRange(3, 1, 1, headers.length).setValues([headers.map(safeCell_)]);
-  sheet.getRange(3, 1, 1, headers.length).setFontWeight('bold').setBackground(COLORS.header);
-  headers.forEach(function (_, index) {
-    sheet.setColumnWidth(index + 1, widths[index]);
-  });
-  const rows = data.adjustments.map(function (item) {
-    return [item.date, item.type, item.amount, item.reason, item.status, item.cancelReason];
-  });
-  appendRowsAt_(sheet, rows, headers.length, 4);
-  if (data.adjustments.length) {
-    sheet.getRange(4, 3, data.adjustments.length, 1).setNumberFormat('#,##0.## "ج"');
-    sheet.getRange(3, 1, data.adjustments.length + 1, headers.length).createFilter();
-  }
-}
-
-function appendRowsAt_(sheet, rows, columnCount, startRow) {
-  if (rows.length === 0) return;
-  const values = rows.map(function (row) {
-    const padded = row.slice(0, columnCount);
-    while (padded.length < columnCount) padded.push('');
-    return padded.map(safeCell_);
-  });
-  sheet.getRange(startRow, 1, values.length, columnCount).setValues(values);
 }

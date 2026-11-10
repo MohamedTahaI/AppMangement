@@ -9,7 +9,7 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { BigButton } from '@/components/ui/BigButton';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
-import { formatDate } from '@/services/dateFormat';
+import { formatDate } from '@/utils/format';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { StatusChip } from '@/components/ui/StatusChip';
 import { MoneyText } from '@/components/ui/MoneyText';

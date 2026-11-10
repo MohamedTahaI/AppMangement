@@ -37,9 +37,12 @@ export const theme = {
     lg: 32,
     xl: 40,
     screen: 16,
+    screenPadding: 16,
     card: 16,
-    cardGap: 16,
+    cardGap: 12,
     section: 24,
+    sectionGap: 24,
+    headerGap: 12,
   },
   sizes: {
     touch: 56,

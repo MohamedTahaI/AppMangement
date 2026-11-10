@@ -11,8 +11,10 @@ import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FormField } from '@/components/ui/FormField';
 import { ScreenTitle } from '@/components/ui/ScreenTitle';
+import { Toast } from '@/components/ui/Toast';
 import { theme } from '@/components/ui/theme';
 import { arabicErrorMessage } from '@/services/errors';
+import { SHEET_SCHEMA_VERSION } from '@/services/reportTables';
 import {
   getSyncStatus,
   pingSheet,
@@ -48,10 +50,12 @@ export default function OnlineSheetScreen() {
     state: 'unbound',
     lastSyncedAt: null,
     error: null,
+    pendingCount: 0,
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [confirmRebuild, setConfirmRebuild] = useState(false);
 
   const load = useCallback(async () => {
@@ -120,8 +124,12 @@ export default function OnlineSheetScreen() {
     setNotice(null);
     try {
       await saveConfiguration();
-      await pingSheet();
-      setNotice('نجح الاتصال بالجدول.');
+      const ping = await pingSheet();
+      const needsFull = !ping.revision || ping.schemaVersion !== SHEET_SCHEMA_VERSION;
+      const result = await syncNow(needsFull ? { full: true } : undefined);
+      const message = result.sent > 0 ? `تم إرسال ${result.sent} تغيير.` : 'نجح الاتصال والجدول محدث.';
+      setNotice(message);
+      setToastMessage(message);
     } catch (testError) {
       setError(arabicErrorMessage(testError, 'تعذر اختبار الاتصال.'));
     } finally {
@@ -136,8 +144,10 @@ export default function OnlineSheetScreen() {
     setNotice(null);
     try {
       await saveConfiguration();
-      await syncNow();
-      setNotice('تم تحديث الجدول بالكامل بنجاح.');
+      const result = await syncNow();
+      const message = result.sent > 0 ? `تم إرسال ${result.sent} تغيير.` : 'لا توجد تغييرات جديدة للإرسال.';
+      setNotice(message);
+      setToastMessage(message);
     } catch (syncError) {
       setError(arabicErrorMessage(syncError, 'تعذر تحديث الجدول.'));
     } finally {
@@ -148,7 +158,19 @@ export default function OnlineSheetScreen() {
 
   const rebuildSheet = async () => {
     setConfirmRebuild(false);
-    await updateSheet();
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await saveConfiguration();
+      const result = await syncNow({ full: true });
+      setNotice(`تمت إعادة بناء الجدول بالكامل (${result.sent} صف).`);
+    } catch (syncError) {
+      setError(arabicErrorMessage(syncError, 'تعذر تحديث الجدول.'));
+    } finally {
+      setBusy(false);
+      void getSyncStatus().then(setStatus);
+    }
   };
 
   const dotColor =
@@ -172,6 +194,9 @@ export default function OnlineSheetScreen() {
             <AppText style={styles.statusText}>{statusLabel(status)}</AppText>
           </View>
           <AppText style={styles.lastSync}>آخر تحديث: {formatSyncDate(status.lastSyncedAt)}</AppText>
+          {status.pendingCount > 0 ? (
+            <AppText style={styles.pending}>{status.pendingCount} تغيير في انتظار الإرسال</AppText>
+          ) : null}
           {status.error ? <AppText style={styles.error}>{status.error}</AppText> : null}
         </Card>
 
@@ -248,6 +273,12 @@ export default function OnlineSheetScreen() {
         onConfirm={() => void rebuildSheet()}
         onCancel={() => setConfirmRebuild(false)}
       />
+      <Toast
+        visible={toastMessage !== null}
+        message={toastMessage ?? ''}
+        variant="success"
+        onDismiss={() => setToastMessage(null)}
+      />
     </>
   );
 }
@@ -289,6 +320,12 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontSize: theme.typography.section,
     fontFamily: theme.typography.extraBold,
+  },
+  pending: {
+    color: theme.colors.warning,
+    fontSize: theme.typography.body,
+    fontFamily: theme.typography.bold,
+    textAlign: 'auto',
   },
   lastSync: {
     color: theme.colors.secondaryText,

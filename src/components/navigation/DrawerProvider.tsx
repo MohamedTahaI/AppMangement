@@ -65,7 +65,7 @@ const GROUPS: { title: string; links: DrawerLink[] }[] = [
     title: 'البيانات',
     links: [
       { label: 'تصدير التقارير', icon: 'file-download', route: '/export-backup' },
-      { label: 'نسخة احتياطية واستعادة', icon: 'backup', route: '/export-backup' },
+      { label: 'النسخة الاحتياطية', icon: 'backup', route: '/backup' },
       { label: 'الجدول الأونلاين', icon: 'cloud-sync', route: '/sync' },
     ],
   },
@@ -112,6 +112,7 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
     state: 'unbound',
     lastSyncedAt: null,
     error: null,
+    pendingCount: 0,
   });
   const [error, setError] = useState<string | null>(null);
   const [drawerWidth, setDrawerWidth] = useState<number>(theme.sizes.drawerWidth);

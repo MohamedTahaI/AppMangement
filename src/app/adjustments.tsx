@@ -11,20 +11,18 @@ import { BackButton } from '@/components/ui/BackButton';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FormField } from '@/components/ui/FormField';
+import { RowAction } from '@/components/ui/RowAction';
 import { ScreenTitle } from '@/components/ui/ScreenTitle';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { theme } from '@/components/ui/theme';
 import { addAdjustment, cancelAdjustment, listAdjustments, type Adjustment, type AdjustmentType } from '@/db/adjustments';
 import { getDashboardTotals } from '@/services/billing';
 import { arabicErrorMessage } from '@/services/errors';
+import { formatDate, formatMoney, formatSignedMoney } from '@/utils/format';
 
 function today(): string {
   const date = new Date();
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-function formatAmount(amount: number): string {
-  return `${amount.toLocaleString('en-US', { maximumFractionDigits: 2 })} ج`;
 }
 
 export default function AdjustmentsScreen() {
@@ -141,8 +139,8 @@ export default function AdjustmentsScreen() {
             <AppText style={styles.totalLabel}>إجمالي التحصيل الحالي</AppText>
             <AnimatedNumber value={collected + netAdjustments} suffix=" ج" size={theme.typography.number} />
             <View style={styles.totalSplit}>
-              <AppText style={styles.itemDetail}>من الدفعات: {formatAmount(collected)}</AppText>
-              <AppText style={styles.itemDetail}>صافي تعديلات الرصيد: {formatAmount(netAdjustments)}</AppText>
+              <AppText style={styles.itemDetail}>من الدفعات: {formatMoney(collected)}</AppText>
+              <AppText style={styles.itemDetail}>صافي تعديلات الرصيد: {formatMoney(netAdjustments)}</AppText>
             </View>
           </Card>
         )}
@@ -212,24 +210,40 @@ export default function AdjustmentsScreen() {
         ) : items.map((item) => (
           <Card key={item.id} style={styles.itemCard}>
             <View style={styles.itemTop}>
-              <View style={styles.itemTypeRow}>
+              <View
+                style={[
+                  styles.itemIcon,
+                  {
+                    backgroundColor: item.type === 'increase'
+                      ? theme.colors.successBackground
+                      : theme.colors.dangerBackground,
+                  },
+                ]}>
                 <MaterialIcons
                   name={item.type === 'increase' ? 'north' : 'south'}
-                  size={theme.sizes.icon}
+                  size={22}
                   color={item.type === 'increase' ? theme.colors.success : theme.colors.danger}
                 />
-                <AppText style={styles.itemType}>
-                  {item.type === 'increase' ? 'زيادة' : 'نقص'} · {item.status === 'active' ? 'سارية' : 'ملغية'}
-                </AppText>
               </View>
-              <AppText style={styles.itemAmount}>
-                {item.type === 'increase' ? '+' : '−'}{formatAmount(item.amount)}
+              <AppText
+                numberOfLines={1}
+                style={[
+                  styles.itemAmount,
+                  { color: item.type === 'increase' ? theme.colors.success : theme.colors.danger },
+                ]}>
+                {formatSignedMoney(item.type === 'increase' ? item.amount : -item.amount)}
               </AppText>
             </View>
-            <AppText style={styles.itemDetail}>التاريخ: {item.adjustment_date}</AppText>
-            <AppText style={styles.itemDetail}>السبب: {item.reason}</AppText>
+            <AppText numberOfLines={2} style={styles.itemDetail}>السبب: {item.reason}</AppText>
+            <AppText style={styles.itemDetail}>
+              {formatDate(item.adjustment_date)}{item.status === 'cancelled' ? ' · ملغى' : ''}
+            </AppText>
             {item.status === 'cancelled' ? (
-              <AppText style={styles.itemDetail}>سبب الإلغاء: {item.cancel_reason}</AppText>
+              item.cancel_reason ? (
+                <AppText numberOfLines={2} style={styles.itemDetail}>
+                  سبب الإلغاء: {item.cancel_reason}
+                </AppText>
+              ) : null
             ) : (
               <>
                 {cancelTarget?.id === item.id ? (
@@ -241,8 +255,9 @@ export default function AdjustmentsScreen() {
                     maxLength={300}
                   />
                 ) : null}
-                <BigButton
-                  title={cancelTarget?.id === item.id ? 'تأكيد إلغاء تعديل الرصيد' : 'إلغاء تعديل الرصيد'}
+                <RowAction
+                  label={cancelTarget?.id === item.id ? 'تأكيد إلغاء تعديل الرصيد' : 'إلغاء تعديل الرصيد'}
+                  icon={cancelTarget?.id === item.id ? 'check' : 'undo'}
                   variant="danger"
                   disabled={busy}
                   onPress={() => {
@@ -267,7 +282,7 @@ export default function AdjustmentsScreen() {
       <ConfirmDialog
         visible={confirmAdd}
         title="تأكيد حفظ تعديل الرصيد"
-        message={`سيظهر سبب تعديل الرصيد «${reason.trim()}» للمقيمين في الجدول. هل تريد حفظ ${type === 'increase' ? 'زيادة' : 'نقص'} بمبلغ ${formatAmount(Number(amount.replaceAll(',', '')))}؟`}
+        message={`سيظهر سبب تعديل الرصيد «${reason.trim()}» للمقيمين في الجدول. هل تريد حفظ ${type === 'increase' ? 'زيادة' : 'نقص'} بمبلغ ${formatMoney(Number(amount.replaceAll(',', '')))}؟`}
         confirmLabel="حفظ"
         onConfirm={() => void save()}
         onCancel={() => setConfirmAdd(false)}
@@ -323,9 +338,15 @@ const styles = StyleSheet.create({
   success: { color: theme.colors.success, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'auto' },
   empty: { color: theme.colors.secondaryText, fontSize: theme.typography.body, textAlign: 'auto' },
   itemCard: { gap: theme.spacingScale.xs },
-  itemTop: { flexDirection: 'row', justifyContent: 'space-between', gap: theme.spacingScale.xs },
-  itemTypeRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacingScale.xs },
-  itemType: { flex: 1, color: theme.colors.text, fontSize: theme.typography.body, fontFamily: theme.typography.extraBold, textAlign: 'auto' },
-  itemAmount: { color: theme.colors.primary, fontSize: theme.typography.body, fontFamily: theme.typography.extraBold, textAlign: 'auto' },
-  itemDetail: { color: theme.colors.secondaryText, fontSize: theme.typography.body, textAlign: 'auto' },
+  itemTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  itemIcon: {
+    width: 40,
+    height: 40,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: theme.radii.pill,
+  },
+  itemAmount: { flexShrink: 1, fontSize: theme.typography.section, fontFamily: theme.typography.extraBold, textAlign: 'auto' },
+  itemDetail: { color: theme.colors.secondaryText, fontSize: theme.typography.small, textAlign: 'auto' },
 });

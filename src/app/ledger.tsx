@@ -1,4 +1,7 @@
 import { AppText } from '@/components/ui/AppText';
+import { Section } from '@/components/ui/Section';
+import { Screen } from '@/components/ui/Screen';
+import { SectionHeader } from '@/components/ui/SectionHeader';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -131,7 +134,7 @@ export default function LedgerScreen() {
   );
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <Screen>
       <ScreenHeader title="سجل العمليات" subtitle="الدفعات والمصروفات وتعديلات الرصيد" />
       <FilterBar
         search={search}
@@ -153,7 +156,7 @@ export default function LedgerScreen() {
               { value: 'all', label: 'الكل' },
               { value: 'payment', label: 'دفعات' },
               { value: 'expense', label: 'مصروفات' },
-              { value: 'adjustment', label: 'تعديل الرصيد' },
+              { value: 'adjustment', label: 'التعديلات' },
             ]}
             onChange={setType}
           />
@@ -185,12 +188,11 @@ export default function LedgerScreen() {
             })}
         />
       )) : null}
-    </ScrollView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flexGrow: 1, padding: theme.spacingScale.screen, gap: theme.spacingScale.sm, paddingBottom: theme.spacingScale.lg, backgroundColor: theme.colors.background, writingDirection: 'rtl' },
   error: { color: theme.colors.danger, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'auto' },
   filterControls: { gap: theme.spacingScale.xs },
   filterTitle: { color: theme.colors.text, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'auto' },

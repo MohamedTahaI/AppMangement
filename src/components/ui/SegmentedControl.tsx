@@ -30,7 +30,14 @@ export function SegmentedControl<T extends string>({
             accessibilityState={{ selected }}
             onPress={() => onChange(option.value)}
             style={[styles.option, selected && styles.optionSelected]}>
-            <AppText style={[styles.label, selected && styles.selectedLabel]}>{option.label}</AppText>
+            <AppText
+              accessible
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
+              style={[styles.label, selected && styles.selectedLabel]}>
+              {option.label}
+            </AppText>
           </Pressable>
         );
       })}
@@ -40,11 +47,11 @@ export function SegmentedControl<T extends string>({
 
 const styles = StyleSheet.create({
   container: {
-    minHeight: theme.sizes.touch,
+    minHeight: 44,
     flexDirection: 'row',
     direction: 'rtl',
     gap: theme.spacingScale.xs,
-    padding: theme.spacingScale.xs,
+    paddingHorizontal: theme.spacingScale.xs,
     borderRadius: theme.radii.md,
     borderWidth: theme.borderWidths.hairline,
     borderColor: theme.colors.border,
@@ -53,18 +60,19 @@ const styles = StyleSheet.create({
   option: {
     flex: 1,
     minWidth: 0,
-    minHeight: theme.sizes.touchCompact,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: theme.spacingScale.xs,
     borderRadius: theme.radii.sm,
     backgroundColor: theme.colors.surface,
+    flexShrink: 1,
   },
   optionSelected: { backgroundColor: theme.colors.primary },
   label: {
     color: theme.colors.text,
-    fontSize: theme.typography.small,
-    fontFamily: theme.typography.bold,
+    fontSize: 15,
+    fontFamily: theme.typography.medium,
     textAlign: 'center',
   },
   selectedLabel: { color: theme.colors.onPrimary },

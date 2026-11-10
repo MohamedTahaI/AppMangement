@@ -1,4 +1,5 @@
 import { AppText } from '@/components/ui/AppText';
+import { Screen } from '@/components/ui/Screen';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -22,11 +23,13 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
 import { StaggeredEntrance } from '@/components/ui/StaggeredEntrance';
 import { StatusChip } from '@/components/ui/StatusChip';
+import { Toast } from '@/components/ui/Toast';
 import { arabicErrorMessage } from '@/services/errors';
+import { getSyncStatus, subscribeToSyncStatus, takeUnlinkedToast, type SyncStatus } from '@/services/sync';
 import { getDashboardTotals, getMonthlyApartmentRows, getUnpaidForMonth, type DashboardTotals, type MonthlyApartmentRow, type UnpaidCharge } from '@/services/billing';
 import { listSpecialCollectionSummaries, type SpecialCollectionSummary } from '@/services/specialCollections';
 import { getDatabase } from '@/db/schema';
-import { getSetting } from '@/db/settings';
+import { getSetting, setSetting } from '@/db/settings';
 import { listApartments } from '@/db/apartments';
 import { listFeeRates } from '@/db/fees';
 import { theme } from '@/theme';
@@ -83,12 +86,20 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dismissedRestoreNotice, setDismissedRestoreNotice] = useState<string | null>(null);
+  const [bannerCooldown, setBannerCooldown] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>({
+    state: 'unbound',
+    lastSyncedAt: null,
+    error: null,
+    pendingCount: 0,
+  });
+  const [toastVisible, setToastVisible] = useState(false);
   const restoreNotice = params.restored && params.restored !== dismissedRestoreNotice;
 
   const load = useCallback(async (showSkeleton = true) => {
     if (showSkeleton) setLoading(true);
     try {
-      const [totals, rows, unpaid, allSpecials, apartments, rates, lastBackup, sheetUrl, db] = await Promise.all([
+      const [totals, rows, unpaid, allSpecials, apartments, rates, lastBackup, sheetUrl, dismissedAt, db] = await Promise.all([
         getDashboardTotals(month),
         getMonthlyApartmentRows(month),
         getUnpaidForMonth(month),
@@ -97,8 +108,12 @@ export default function HomeScreen() {
         listFeeRates(),
         getSetting('last_backup_at'),
         getSetting('sheet_url'),
+        getSetting('sync_banner_dismissed_at'),
         getDatabase(),
       ]);
+      setBannerCooldown(
+        dismissedAt ? Date.now() - Date.parse(dismissedAt) < 24 * 60 * 60 * 1000 : false,
+      );
       const activities = await db.getAllAsync<Activity>(
         `SELECT id, type, date, title, note, amount FROM (
           SELECT p.id, 'payment' AS type, p.paid_date AS date,
@@ -151,6 +166,25 @@ export default function HomeScreen() {
     void load();
   }, [load]));
 
+  useFocusEffect(useCallback(() => {
+    const update = () => {
+      void getSyncStatus().then((status) => {
+        setSyncStatus(status);
+        if (takeUnlinkedToast()) setToastVisible(true);
+      }).catch(() => undefined);
+    };
+    update();
+    return subscribeToSyncStatus(update);
+  }, []));
+
+  const dismissSyncBanner = () => {
+    const value = new Date().toISOString();
+    setBannerCooldown(true);
+    void setSetting('sync_banner_dismissed_at', value).catch(() => undefined);
+  };
+  const showUnlinkedBanner = !loading && data.apartmentCount > 0 && !data.sheetConnected && !bannerCooldown;
+  const showPendingBanner = data.sheetConnected && syncStatus.pendingCount > 0;
+
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -172,13 +206,10 @@ export default function HomeScreen() {
     { key: 'apartments', title: 'إضافة الشقق', route: '/apartments', done: data.apartmentCount > 0, icon: 'apartment' },
     { key: 'fee', title: 'تحديد قيمة الفاتورة الشهرية', route: '/fee', done: data.feeExists, icon: 'payments' },
     { key: 'sheet', title: 'ربط الجدول الأونلاين (اختياري)', route: '/sync', done: data.sheetConnected, icon: 'cloud-sync' },
-    { key: 'backup', title: 'أخذ أول نسخة احتياطية', route: '/export-backup', done: data.backupDone, icon: 'backup' },
+    { key: 'backup', title: 'أخذ أول نسخة احتياطية', route: '/backup', done: data.backupDone, icon: 'backup' },
   ] as const;
-
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={styles.container}
+    <Screen
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -187,10 +218,42 @@ export default function HomeScreen() {
           colors={[theme.colors.primary]}
         />
       }>
+
+
+
+
       <ScreenHeader title="الرئيسية" subtitle={getMonthLabel(month)} />
       {restoreNotice ? (
         <Pressable onPress={() => setDismissedRestoreNotice(params.restored ?? null)}>
           <AppText style={styles.restoreNotice}>تمت استعادة البيانات بنجاح.</AppText>
+        </Pressable>
+      ) : null}
+      {showUnlinkedBanner ? (
+        <Pressable onPress={() => router.push('/sync')} style={styles.syncBanner}>
+          <MaterialIcons name="cloud-off" size={theme.sizes.icon} color={theme.colors.warning} />
+          <View style={styles.syncBannerCopy}>
+            <AppText style={styles.syncBannerText}>
+              الجدول الأونلاين غير مربوط — بياناتك محفوظة وستُرسل عند الربط
+            </AppText>
+            <AppText style={styles.syncBannerLink}>ربط الجدول</AppText>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="إخفاء التنبيه"
+            hitSlop={10}
+            onPress={(event) => {
+              event.stopPropagation();
+              dismissSyncBanner();
+            }}
+            style={styles.syncBannerClose}>
+            <MaterialIcons name="close" size={theme.sizes.iconSmall} color={theme.colors.warning} />
+          </Pressable>
+        </Pressable>
+      ) : null}
+      {showPendingBanner ? (
+        <Pressable onPress={() => router.push('/sync')} style={styles.syncBannerPending}>
+          <MaterialIcons name="cloud-upload" size={theme.sizes.icon} color={theme.colors.warning} />
+          <AppText style={styles.syncPendingText}>{syncStatus.pendingCount} تغيير في انتظار الإرسال</AppText>
         </Pressable>
       ) : null}
       <MonthPicker month={month} onChange={setMonth} />
@@ -359,7 +422,7 @@ export default function HomeScreen() {
             />
           ))}
           {data.hasData && data.backupOld ? (
-            <Pressable onPress={() => router.push('/export-backup')}>
+            <Pressable onPress={() => router.push('/backup')}>
               <Card style={styles.backup}>
                 <MaterialIcons name="backup" size={theme.sizes.icon} color={theme.colors.warning} />
                 <AppText style={styles.backupText}>حان وقت أخذ نسخة احتياطية لبيانات العمارة.</AppText>
@@ -371,12 +434,64 @@ export default function HomeScreen() {
         </View>
       ) : null}
       </MonthTransition>
-    </ScrollView>
+
+    <Toast
+      visible={toastVisible}
+      message="بياناتك محفوظة على الهاتف. اربط الجدول لإرسالها."
+      variant="info"
+      onDismiss={() => setToastVisible(false)}
+    />
+  </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: theme.colors.background },
   scroll: { flex: 1, backgroundColor: theme.colors.background },
+  syncBanner: {
+    minHeight: theme.sizes.touch,
+    padding: theme.spacingScale.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacingScale.xs,
+    borderRadius: theme.radii.md,
+    backgroundColor: theme.colors.warningBackground,
+  },
+  syncBannerPending: {
+    minHeight: theme.sizes.touch,
+    padding: theme.spacingScale.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacingScale.xs,
+    borderRadius: theme.radii.md,
+    backgroundColor: theme.colors.warningBackground,
+  },
+  syncBannerCopy: { flex: 1, gap: theme.spacingScale.xs },
+  syncBannerText: {
+    color: theme.colors.text,
+    fontSize: theme.typography.small,
+    fontFamily: theme.typography.bold,
+    textAlign: 'auto',
+  },
+  syncPendingText: {
+    flex: 1,
+    color: theme.colors.text,
+    fontSize: theme.typography.small,
+    fontFamily: theme.typography.bold,
+    textAlign: 'auto',
+  },
+  syncBannerLink: {
+    color: theme.colors.primary,
+    fontSize: theme.typography.small,
+    fontFamily: theme.typography.extraBold,
+    textAlign: 'auto',
+  },
+  syncBannerClose: {
+    width: theme.sizes.touchCompact,
+    height: theme.sizes.touchCompact,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   container: { flexGrow: 1, padding: theme.spacingScale.screen, gap: theme.spacingScale.sm, paddingBottom: theme.spacingScale.lg, backgroundColor: theme.colors.background, writingDirection: 'rtl' },
   homeSections: { gap: theme.spacingScale.section },
   heroStatsGroup: { gap: theme.spacingScale.sm },

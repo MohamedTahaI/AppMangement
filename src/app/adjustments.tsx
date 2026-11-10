@@ -1,7 +1,9 @@
+import { SectionHeader } from '@/components/ui/SectionHeader';
+import { AppText } from '@/components/ui/AppText';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
 import { BigButton } from '@/components/ui/BigButton';
@@ -55,7 +57,7 @@ export default function AdjustmentsScreen() {
       setNetAdjustments(totals.totalAdjustments);
       setError(null);
     } catch (loadError) {
-      setError(arabicErrorMessage(loadError, 'تعذر تحميل سجل التسويات.'));
+      setError(arabicErrorMessage(loadError, 'تعذر تحميل سجل تعديلات الرصيد.'));
     } finally {
       setLoading(false);
     }
@@ -72,7 +74,7 @@ export default function AdjustmentsScreen() {
       return;
     }
     if (reason.trim().length < 3) {
-      setError('سبب التسوية مطلوب (3 أحرف على الأقل).');
+      setError('سبب تعديل الرصيد مطلوب (3 أحرف على الأقل).');
       return;
     }
     if (type === 'decrease' && parsedAmount > collected + netAdjustments) {
@@ -100,11 +102,11 @@ export default function AdjustmentsScreen() {
       setConfirmAdd(false);
       setAmount('');
       setReason('');
-      setNotice('تم حفظ التسوية.');
+      setNotice('تم حفظ تعديل الرصيد.');
       await load();
     } catch (saveError) {
       setConfirmAdd(false);
-      setError(arabicErrorMessage(saveError, 'تعذر حفظ التسوية.'));
+      setError(arabicErrorMessage(saveError, 'تعذر حفظ تعديل الرصيد.'));
     } finally {
       setBusy(false);
     }
@@ -119,11 +121,11 @@ export default function AdjustmentsScreen() {
       setConfirmCancel(false);
       setCancelTarget(null);
       setCancelReason('');
-      setNotice('تم إلغاء التسوية مع الاحتفاظ بها في السجل.');
+      setNotice('تم إلغاء تعديل الرصيد مع الاحتفاظ به في السجل.');
       await load();
     } catch (cancelError) {
       setConfirmCancel(false);
-      setError(arabicErrorMessage(cancelError, 'تعذر إلغاء التسوية.'));
+      setError(arabicErrorMessage(cancelError, 'تعذر إلغاء تعديل الرصيد.'));
     } finally {
       setBusy(false);
     }
@@ -133,19 +135,19 @@ export default function AdjustmentsScreen() {
     <>
       <ScrollView contentContainerStyle={styles.container}>
         <BackButton onPress={() => router.back()} label="رجوع" />
-        <ScreenTitle title="تسوية المبلغ الكلي" subtitle="زيادة أو نقص في إجمالي التحصيل" />
+        <ScreenTitle title="تعديل الرصيد" subtitle="استخدمها لو دخلت فلوس من بره العمارة، أو لتصحيح الرصيد، مع كتابة السبب" />
         {loading ? <Skeleton height={theme.sizes.regularCardHeight} /> : (
           <Card variant="surface" style={styles.totalCard}>
-            <Text style={styles.totalLabel}>إجمالي التحصيل الحالي</Text>
+            <AppText style={styles.totalLabel}>إجمالي التحصيل الحالي</AppText>
             <AnimatedNumber value={collected + netAdjustments} suffix=" ج" size={theme.typography.number} />
             <View style={styles.totalSplit}>
-              <Text style={styles.itemDetail}>من الدفعات: {formatAmount(collected)}</Text>
-              <Text style={styles.itemDetail}>صافي التسويات: {formatAmount(netAdjustments)}</Text>
+              <AppText style={styles.itemDetail}>من الدفعات: {formatAmount(collected)}</AppText>
+              <AppText style={styles.itemDetail}>صافي تعديلات الرصيد: {formatAmount(netAdjustments)}</AppText>
             </View>
           </Card>
         )}
         <Card style={styles.formCard}>
-          <Text style={styles.sectionTitle}>إضافة تسوية</Text>
+          <SectionHeader title="إضافة تعديل للرصيد" />
           <View style={styles.typeRow}>
             {([
               ['increase', 'زيادة'],
@@ -156,7 +158,7 @@ export default function AdjustmentsScreen() {
                 accessibilityRole="button"
                 onPress={() => setType(itemType)}
                 style={[styles.typeButton, type === itemType && styles.typeSelected]}>
-                <Text style={[styles.typeText, type === itemType && styles.typeTextSelected]}>{label}</Text>
+                <AppText style={[styles.typeText, type === itemType && styles.typeTextSelected]}>{label}</AppText>
               </Pressable>
             ))}
           </View>
@@ -171,7 +173,7 @@ export default function AdjustmentsScreen() {
             label="السبب (سيظهر للمقيمين في الجدول)"
             value={reason}
             onChangeText={setReason}
-            placeholder="اكتب سبب التسوية"
+            placeholder="اكتب سبب تعديل الرصيد"
             maxLength={300}
           />
           <FormField
@@ -182,31 +184,31 @@ export default function AdjustmentsScreen() {
             maxLength={10}
           />
           {type === 'decrease' ? (
-            <Text style={styles.warning}>
+            <AppText style={styles.warning}>
               لا يمكن أن يجعل هذا النقص إجمالي التحصيل أقل من صفر.
-            </Text>
+            </AppText>
           ) : null}
           <Card style={styles.previewCard}>
-            <Text style={styles.itemDetail}>المبلغ الكلي سيصبح</Text>
+            <AppText style={styles.itemDetail}>المبلغ الكلي سيصبح</AppText>
             <AnimatedNumber
               value={collected + netAdjustments + (type === 'increase' ? 1 : -1) * (Number(amount.replaceAll(',', '')) || 0)}
               suffix=" ج"
               size={theme.sizes.icon}
             />
           </Card>
-          {reason.trim().length < 3 ? <Text style={styles.hint}>اكتب سبباً من 3 أحرف على الأقل لتفعيل الحفظ.</Text> : null}
+          {reason.trim().length < 3 ? <AppText style={styles.hint}>اكتب سبباً من 3 أحرف على الأقل لتفعيل الحفظ.</AppText> : null}
           <BigButton
-            title={busy ? 'جارٍ الحفظ...' : 'حفظ التسوية'}
+            title={busy ? 'جارٍ الحفظ...' : 'حفظ تعديل الرصيد'}
             disabled={busy || reason.trim().length < 3}
             onPress={prepareAdd}
           />
         </Card>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {notice ? <Text style={styles.success}>{notice}</Text> : null}
-        <Text style={styles.sectionTitle}>سجل التسويات</Text>
+        {error ? <AppText style={styles.error}>{error}</AppText> : null}
+        {notice ? <AppText style={styles.success}>{notice}</AppText> : null}
+        <SectionHeader title="سجل تعديلات الرصيد" />
         {items.length === 0 ? (
-          <Card><Text style={styles.empty}>لا توجد تسويات حتى الآن.</Text></Card>
+          <Card><AppText style={styles.empty}>لا توجد تعديلات على الرصيد حتى الآن.</AppText></Card>
         ) : items.map((item) => (
           <Card key={item.id} style={styles.itemCard}>
             <View style={styles.itemTop}>
@@ -216,18 +218,18 @@ export default function AdjustmentsScreen() {
                   size={theme.sizes.icon}
                   color={item.type === 'increase' ? theme.colors.success : theme.colors.danger}
                 />
-                <Text style={styles.itemType}>
+                <AppText style={styles.itemType}>
                   {item.type === 'increase' ? 'زيادة' : 'نقص'} · {item.status === 'active' ? 'سارية' : 'ملغية'}
-                </Text>
+                </AppText>
               </View>
-              <Text style={styles.itemAmount}>
+              <AppText style={styles.itemAmount}>
                 {item.type === 'increase' ? '+' : '−'}{formatAmount(item.amount)}
-              </Text>
+              </AppText>
             </View>
-            <Text style={styles.itemDetail}>التاريخ: {item.adjustment_date}</Text>
-            <Text style={styles.itemDetail}>السبب: {item.reason}</Text>
+            <AppText style={styles.itemDetail}>التاريخ: {item.adjustment_date}</AppText>
+            <AppText style={styles.itemDetail}>السبب: {item.reason}</AppText>
             {item.status === 'cancelled' ? (
-              <Text style={styles.itemDetail}>سبب الإلغاء: {item.cancel_reason}</Text>
+              <AppText style={styles.itemDetail}>سبب الإلغاء: {item.cancel_reason}</AppText>
             ) : (
               <>
                 {cancelTarget?.id === item.id ? (
@@ -240,7 +242,7 @@ export default function AdjustmentsScreen() {
                   />
                 ) : null}
                 <BigButton
-                  title={cancelTarget?.id === item.id ? 'تأكيد إلغاء التسوية' : 'إلغاء التسوية'}
+                  title={cancelTarget?.id === item.id ? 'تأكيد إلغاء تعديل الرصيد' : 'إلغاء تعديل الرصيد'}
                   variant="danger"
                   disabled={busy}
                   onPress={() => {
@@ -264,17 +266,17 @@ export default function AdjustmentsScreen() {
 
       <ConfirmDialog
         visible={confirmAdd}
-        title="تأكيد حفظ التسوية"
-        message={`سيظهر سبب التسوية «${reason.trim()}» للمقيمين في الجدول. هل تريد حفظ ${type === 'increase' ? 'زيادة' : 'نقص'} بمبلغ ${formatAmount(Number(amount.replaceAll(',', '')))}؟`}
+        title="تأكيد حفظ تعديل الرصيد"
+        message={`سيظهر سبب تعديل الرصيد «${reason.trim()}» للمقيمين في الجدول. هل تريد حفظ ${type === 'increase' ? 'زيادة' : 'نقص'} بمبلغ ${formatAmount(Number(amount.replaceAll(',', '')))}؟`}
         confirmLabel="حفظ"
         onConfirm={() => void save()}
         onCancel={() => setConfirmAdd(false)}
       />
       <ConfirmDialog
         visible={confirmCancel}
-        title="تأكيد إلغاء التسوية"
-        message={`سيبقى السجل ظاهراً بحالة «ملغية». سبب الإلغاء: ${cancelReason.trim()}`}
-        confirmLabel="إلغاء التسوية"
+        title="تأكيد إلغاء تعديل الرصيد"
+        message={`سيبقى السجل ظاهراً بحالة «ملغى». سبب الإلغاء: ${cancelReason.trim()}`}
+        confirmLabel="إلغاء التعديل"
         destructive
         onConfirm={() => void confirmCancellation()}
         onCancel={() => setConfirmCancel(false)}
@@ -297,11 +299,11 @@ const styles = StyleSheet.create({
   backText: { color: theme.colors.primary, fontSize: theme.typography.body, fontFamily: theme.typography.bold },
   formCard: { gap: theme.spacingScale.sm },
   totalCard: { alignItems: 'flex-end', gap: theme.spacingScale.xs },
-  totalLabel: { color: theme.colors.secondaryText, fontSize: theme.typography.body, textAlign: 'right' },
+  totalLabel: { color: theme.colors.secondaryText, fontSize: theme.typography.body, textAlign: 'auto' },
   totalSplit: { width: '100%', gap: theme.spacingScale.xs },
   previewCard: { alignItems: 'flex-end', paddingVertical: theme.spacingScale.xs, gap: theme.spacingScale.xs, backgroundColor: theme.colors.paidBackground },
-  hint: { color: theme.colors.secondaryText, fontSize: theme.typography.small, textAlign: 'right' },
-  sectionTitle: { color: theme.colors.text, fontSize: theme.typography.heading, fontFamily: theme.typography.extraBold, textAlign: 'right' },
+  hint: { color: theme.colors.secondaryText, fontSize: theme.typography.small, textAlign: 'auto' },
+  sectionTitle: { color: theme.colors.text, fontSize: theme.typography.heading, fontFamily: theme.typography.extraBold, textAlign: 'auto' },
   typeRow: { flexDirection: 'row', gap: theme.spacingScale.xs },
   typeButton: {
     flex: 1,
@@ -316,14 +318,14 @@ const styles = StyleSheet.create({
   typeSelected: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
   typeText: { color: theme.colors.text, fontSize: theme.typography.section, fontFamily: theme.typography.bold },
   typeTextSelected: { color: theme.colors.surface },
-  warning: { color: theme.colors.warning, fontSize: theme.typography.body, textAlign: 'right' },
-  error: { color: theme.colors.danger, fontSize: theme.typography.body, textAlign: 'right' },
-  success: { color: theme.colors.success, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'right' },
-  empty: { color: theme.colors.secondaryText, fontSize: theme.typography.body, textAlign: 'right' },
+  warning: { color: theme.colors.warning, fontSize: theme.typography.body, textAlign: 'auto' },
+  error: { color: theme.colors.danger, fontSize: theme.typography.body, textAlign: 'auto' },
+  success: { color: theme.colors.success, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'auto' },
+  empty: { color: theme.colors.secondaryText, fontSize: theme.typography.body, textAlign: 'auto' },
   itemCard: { gap: theme.spacingScale.xs },
   itemTop: { flexDirection: 'row', justifyContent: 'space-between', gap: theme.spacingScale.xs },
   itemTypeRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacingScale.xs },
-  itemType: { flex: 1, color: theme.colors.text, fontSize: theme.typography.body, fontFamily: theme.typography.extraBold, textAlign: 'right' },
-  itemAmount: { color: theme.colors.primary, fontSize: theme.typography.body, fontFamily: theme.typography.extraBold, textAlign: 'right' },
-  itemDetail: { color: theme.colors.secondaryText, fontSize: theme.typography.body, textAlign: 'right' },
+  itemType: { flex: 1, color: theme.colors.text, fontSize: theme.typography.body, fontFamily: theme.typography.extraBold, textAlign: 'auto' },
+  itemAmount: { color: theme.colors.primary, fontSize: theme.typography.body, fontFamily: theme.typography.extraBold, textAlign: 'auto' },
+  itemDetail: { color: theme.colors.secondaryText, fontSize: theme.typography.body, textAlign: 'auto' },
 });

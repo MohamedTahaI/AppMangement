@@ -1,5 +1,5 @@
 export function arabicErrorMessage(error: unknown, fallback: string): string {
-  console.error(fallback, error);
+  if (__DEV__) console.log(fallback, error);
   if (!(error instanceof Error)) return fallback;
 
   if (/unique constraint/i.test(error.message)) {
@@ -13,6 +13,9 @@ export function arabicErrorMessage(error: unknown, fallback: string): string {
   }
   if (/payment exceeds the remaining amount/i.test(error.message)) {
     return 'المبلغ أكبر من المتبقي على الشهور المحددة.';
+  }
+  if (/[\u0600-\u06FF]/u.test(error.message) && !/[A-Za-z]/u.test(error.message)) {
+    return error.message;
   }
   return fallback;
 }

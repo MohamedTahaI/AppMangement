@@ -3,19 +3,13 @@ import NetInfo from '@react-native-community/netinfo';
 
 import { getDatabase, subscribeToDirty } from '@/db/schema';
 import { getSetting } from '@/db/settings';
+import { getReportData } from './reportData';
+import { buildSheetRows } from './sheetRows';
 
 export interface SyncStatus {
   state: 'unbound' | 'synced' | 'waiting' | 'failed';
   lastSyncedAt: string | null;
   error: string | null;
-}
-
-interface MonthlyChargeRow {
-  apartmentNumber: string;
-  ownerName: string;
-  month: string;
-  due: number;
-  paid: number;
 }
 
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -46,7 +40,7 @@ function statusFromValues(
   lastSyncedAt: string | null,
 ): SyncStatus {
   if (!url?.trim()) return { state: 'unbound', lastSyncedAt, error: null };
-  if (error) return { state: 'failed', lastSyncedAt, error };
+  if (error) return { state: 'failed', lastSyncedAt, error: shortArabicError(new Error(error)) };
   if (dirty === '1') return { state: 'waiting', lastSyncedAt, error: null };
   return { state: 'synced', lastSyncedAt, error: null };
 }
@@ -72,252 +66,8 @@ export function subscribeToSyncStatus(listener: () => void): () => void {
 }
 
 export async function buildSnapshot() {
-  const db = await getDatabase();
-  const [
-    building,
-    apartments,
-    paymentsByMonth,
-    expensesByMonth,
-    monthlyCharges,
-    collectionRows,
-    specialCharges,
-    expenses,
-    payments,
-    adjustments,
-    adjustmentsByMonth,
-    totals,
-  ] = await Promise.all([
-    getSetting('building_name'),
-    db.getAllAsync<{ number: string; ownerName: string }>(
-      'SELECT number, owner_name AS ownerName FROM apartments ORDER BY number',
-    ),
-    db.getAllAsync<{ month: string; collected: number }>(
-      `SELECT substr(paid_date, 1, 7) AS month, SUM(amount) AS collected
-       FROM payments WHERE deleted = 0 GROUP BY substr(paid_date, 1, 7)`,
-    ),
-    db.getAllAsync<{ month: string; expenses: number }>(
-      `SELECT month, SUM(amount) AS expenses FROM expenses
-       WHERE deleted = 0 GROUP BY month`,
-    ),
-    db.getAllAsync<MonthlyChargeRow>(
-      `SELECT a.number AS apartmentNumber, a.owner_name AS ownerName, c.month,
-        c.amount_due AS due,
-        COALESCE(SUM(CASE WHEN p.deleted = 0 THEN p.amount ELSE 0 END), 0) AS paid
-       FROM charges c
-       JOIN apartments a ON a.id = c.apartment_id
-       LEFT JOIN payments p ON p.charge_id = c.id
-       WHERE c.type = 'monthly'
-       GROUP BY c.id, a.id
-       ORDER BY c.month, a.number`,
-    ),
-    db.getAllAsync<{ id: number; title: string }>(
-      'SELECT id, title FROM special_collections ORDER BY date, id',
-    ),
-    db.getAllAsync<{
-      specialId: number;
-      title: string;
-      apartmentNumber: string;
-      ownerName: string;
-      due: number;
-      paid: number;
-    }>(
-      `SELECT s.id AS specialId, s.title, a.number AS apartmentNumber, a.owner_name AS ownerName,
-        c.amount_due AS due,
-        COALESCE(SUM(CASE WHEN p.deleted = 0 THEN p.amount ELSE 0 END), 0) AS paid
-       FROM special_collections s
-       JOIN charges c ON c.special_id = s.id AND c.type = 'special'
-       JOIN apartments a ON a.id = c.apartment_id
-       LEFT JOIN payments p ON p.charge_id = c.id
-       GROUP BY s.id, c.id, a.id
-       ORDER BY s.date, s.id, a.number`,
-    ),
-    db.getAllAsync<{
-      date: string;
-      category: string;
-      amount: number;
-      note: string;
-      linkedCollection: string | null;
-    }>(
-      `SELECT e.expense_date AS date, cat.name AS category, e.amount, e.note,
-        s.title AS linkedCollection
-       FROM expenses e
-       JOIN expense_categories cat ON cat.id = e.category_id
-       LEFT JOIN special_collections s ON s.id = e.special_id
-       WHERE e.deleted = 0
-       ORDER BY e.expense_date, e.id`,
-    ),
-    db.getAllAsync<{
-      date: string;
-      apartmentNumber: string;
-      ownerName: string;
-      type: 'monthly' | 'special';
-      month: string | null;
-      specialTitle: string | null;
-      amount: number;
-    }>(
-      `SELECT p.paid_date AS date, a.number AS apartmentNumber, a.owner_name AS ownerName,
-        c.type, c.month, s.title AS specialTitle, p.amount
-       FROM payments p
-       JOIN charges c ON c.id = p.charge_id
-       JOIN apartments a ON a.id = c.apartment_id
-       LEFT JOIN special_collections s ON s.id = c.special_id
-       WHERE p.deleted = 0
-       ORDER BY p.paid_date, p.id`,
-    ),
-    db.getAllAsync<{
-       date: string;
-       type: 'increase' | 'decrease';
-       amount: number;
-       reason: string;
-       status: 'active' | 'cancelled';
-       cancelReason: string | null;
-    }>(
-       `SELECT adjustment_date AS date, type, amount, reason, status,
-         cancel_reason AS cancelReason
-        FROM adjustments ORDER BY adjustment_date DESC, id DESC`,
-    ),
-    db.getAllAsync<{ month: string; total: number }>(
-       `SELECT month, SUM(CASE WHEN type = 'increase' THEN amount ELSE -amount END) AS total
-        FROM adjustments WHERE status = 'active' GROUP BY month`,
-    ),
-    db.getFirstAsync<{ paymentTotal: number; adjustmentTotal: number; totalExpenses: number }>(
-       `SELECT
-         (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE deleted = 0) AS paymentTotal,
-         (SELECT COALESCE(SUM(CASE WHEN type = 'increase' THEN amount ELSE -amount END), 0)
-          FROM adjustments WHERE status = 'active') AS adjustmentTotal,
-         (SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE deleted = 0) AS totalExpenses`,
-    ),
-  ]);
-
-  const monthTotals = new Map<string, { month: string; collected: number; expenses: number }>();
-  for (const row of paymentsByMonth) {
-    monthTotals.set(row.month, { month: row.month, collected: row.collected, expenses: 0 });
-  }
-  for (const row of expensesByMonth) {
-    const current = monthTotals.get(row.month) ?? { month: row.month, collected: 0, expenses: 0 };
-    current.expenses = row.expenses;
-    monthTotals.set(row.month, current);
-  }
-  for (const row of adjustmentsByMonth) {
-    const current = monthTotals.get(row.month) ?? { month: row.month, collected: 0, expenses: 0 };
-    current.collected += row.total;
-    monthTotals.set(row.month, current);
-  }
-
-  const years = new Map<number, Map<string, {
-    number: string;
-    ownerName: string;
-    months: Record<string, { paid: number; due: number; status: string }>;
-    totalPaid: number;
-    totalRemaining: number;
-  }>>();
-  for (const charge of monthlyCharges) {
-    const year = Number(charge.month.slice(0, 4));
-    const month = charge.month.slice(5, 7);
-    let apartmentsForYear = years.get(year);
-    if (!apartmentsForYear) {
-      apartmentsForYear = new Map();
-      years.set(year, apartmentsForYear);
-    }
-    let apartment = apartmentsForYear.get(charge.apartmentNumber);
-    if (!apartment) {
-      apartment = {
-        number: charge.apartmentNumber,
-        ownerName: charge.ownerName,
-        months: {},
-        totalPaid: 0,
-        totalRemaining: 0,
-      };
-      apartmentsForYear.set(charge.apartmentNumber, apartment);
-    }
-    const paid = Number(charge.paid) || 0;
-    const due = Number(charge.due) || 0;
-    apartment.months[month] = {
-      paid,
-      due,
-      status: paid >= due ? 'مدفوع' : paid > 0 ? 'جزئي' : 'لم يدفع',
-    };
-    apartment.totalPaid += paid;
-    apartment.totalRemaining += Math.max(0, due - paid);
-  }
-
-  const collections = new Map<number, {
-    id: number;
-    title: string;
-    apartments: {
-      number: string;
-      ownerName: string;
-      due: number;
-      paid: number;
-      remaining: number;
-      status: string;
-    }[];
-  }>();
-  for (const row of collectionRows) {
-    collections.set(row.id, { id: row.id, title: row.title, apartments: [] });
-  }
-  for (const charge of specialCharges) {
-    let collection = collections.get(charge.specialId);
-    if (!collection) {
-      collection = { id: charge.specialId, title: charge.title, apartments: [] };
-      collections.set(charge.specialId, collection);
-    }
-    const paid = Number(charge.paid) || 0;
-    const due = Number(charge.due) || 0;
-    collection.apartments.push({
-      number: charge.apartmentNumber,
-      ownerName: charge.ownerName,
-      due,
-      paid,
-      remaining: Math.max(0, due - paid),
-      status: paid >= due ? 'مدفوع' : paid > 0 ? 'جزئي' : 'لم يدفع',
-    });
-  }
-
-  const paymentTotal = totals?.paymentTotal ?? 0;
-  const adjustmentTotal = totals?.adjustmentTotal ?? 0;
-  const totalCollected = paymentTotal + adjustmentTotal;
-  const totalExpenses = totals?.totalExpenses ?? 0;
-  return {
-    summary: {
-      buildingName: building ?? '',
-      generatedAt: new Date().toISOString(),
-      collectedFromPayments: paymentTotal,
-      netAdjustments: adjustmentTotal,
-      totalCollected,
-      totalExpenses,
-      balance: totalCollected - totalExpenses,
-    },
-    monthlySummary: [...monthTotals.values()].sort((a, b) => a.month.localeCompare(b.month)),
-    monthlyMatrix: [...years.entries()]
-      .sort(([yearA], [yearB]) => yearA - yearB)
-      .map(([year, yearApartments]) => ({
-        year,
-        apartments: [...yearApartments.values()].sort((a, b) => a.number.localeCompare(b.number)),
-      })),
-    specialCollections: [...collections.values()],
-    expenses: expenses.map((item) => ({
-      ...item,
-      linkedCollection: item.linkedCollection ?? '',
-    })),
-    payments: payments.map((item) => ({
-      date: item.date,
-      apartmentNumber: item.apartmentNumber,
-      ownerName: item.ownerName,
-      type: item.type === 'monthly' ? 'اشتراك شهري' : 'تحصيل خاص',
-      monthOrCollection: item.month ?? item.specialTitle ?? '',
-      amount: item.amount,
-    })),
-    adjustments: adjustments.map((item) => ({
-      date: item.date,
-      type: item.type === 'increase' ? 'زيادة' : 'نقص',
-      amount: item.amount,
-      reason: item.reason,
-      status: item.status === 'active' ? 'سارية' : 'ملغية',
-      cancelReason: item.cancelReason ?? '',
-    })),
-    apartments,
-  };
+  const report = await getReportData({ kind: 'all' });
+  return buildSheetRows(report);
 }
 
 async function postRequest(action: 'ping' | 'sync', data?: Awaited<ReturnType<typeof buildSnapshot>>): Promise<void> {
@@ -431,7 +181,7 @@ export function startAutoSync(): () => void {
         if (!disposed && mutationVersion !== versionAtStart) schedule();
       }
     } catch (error) {
-      console.error('تعذر التحقق من حالة التحديث التلقائي.', error);
+      if (__DEV__) console.log('تعذر التحقق من حالة التحديث التلقائي.', error);
     }
   };
 

@@ -1,8 +1,6 @@
-import { useEffect, useState } from 'react';
-import { I18nManager, Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { AppText } from '@/components/ui/AppText';
+import { Pressable, StyleSheet, View } from 'react-native';
 
-import { useMotion } from '@/hooks/useMotion';
 import { theme } from '@/theme';
 
 export interface SegmentOption<T extends string> {
@@ -21,30 +19,9 @@ export function SegmentedControl<T extends string>({
   options,
   onChange,
 }: SegmentedControlProps<T>) {
-  const [width, setWidth] = useState(0);
-  const motion = useMotion();
-  const position = useSharedValue(0);
-  const selectedIndex = Math.max(0, options.findIndex((option) => option.value === value));
-  const segmentWidth = width / Math.max(1, options.length);
-  const visualIndex = I18nManager.isRTL ? options.length - selectedIndex - 1 : selectedIndex;
-  const indicatorStyle = useAnimatedStyle(() => ({
-    width: segmentWidth,
-    transform: [{ translateX: position.value }],
-  }));
-
-  useEffect(() => {
-    const target = visualIndex * segmentWidth;
-    position.value = motion.enabled
-      ? withTiming(target, { duration: motion.durations.normal })
-      : target;
-  }, [motion, position, segmentWidth, visualIndex]);
-
   return (
-    <View
-      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
-      style={[styles.container, I18nManager.isRTL && styles.rtlContainer]}>
-      <Animated.View pointerEvents="none" style={[styles.indicator, indicatorStyle]} />
-      {(I18nManager.isRTL ? [...options].reverse() : options).map((option) => {
+    <View style={styles.container}>
+      {options.map((option) => {
         const selected = value === option.value;
         return (
           <Pressable
@@ -52,8 +29,8 @@ export function SegmentedControl<T extends string>({
             accessibilityRole="button"
             accessibilityState={{ selected }}
             onPress={() => onChange(option.value)}
-            style={styles.option}>
-            <Text style={[styles.label, selected && styles.selectedLabel]}>{option.label}</Text>
+            style={[styles.option, selected && styles.optionSelected]}>
+            <AppText style={[styles.label, selected && styles.selectedLabel]}>{option.label}</AppText>
           </Pressable>
         );
       })}
@@ -65,32 +42,28 @@ const styles = StyleSheet.create({
   container: {
     minHeight: theme.sizes.touch,
     flexDirection: 'row',
+    direction: 'rtl',
+    gap: theme.spacingScale.xs,
     padding: theme.spacingScale.xs,
     borderRadius: theme.radii.md,
     borderWidth: theme.borderWidths.hairline,
     borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface,
-    overflow: 'hidden',
-  },
-  rtlContainer: { flexDirection: 'row-reverse' },
-  indicator: {
-    position: 'absolute',
-    top: 4,
-    bottom: 4,
-    left: 4,
-    borderRadius: theme.radii.sm,
-    backgroundColor: theme.colors.primary,
   },
   option: {
     flex: 1,
+    minWidth: 0,
     minHeight: theme.sizes.touchCompact,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 1,
+    paddingHorizontal: theme.spacingScale.xs,
+    borderRadius: theme.radii.sm,
+    backgroundColor: theme.colors.surface,
   },
+  optionSelected: { backgroundColor: theme.colors.primary },
   label: {
     color: theme.colors.text,
-    fontSize: theme.typography.body,
+    fontSize: theme.typography.small,
     fontFamily: theme.typography.bold,
     textAlign: 'center',
   },

@@ -1,6 +1,7 @@
 import { addApartment } from '../db/apartments';
 import { setFeeRate } from '../db/fees';
 import { getDatabase, markDirty } from '../db/schema';
+import { setSetting } from '../db/settings';
 import { arabicErrorMessage } from './errors';
 import {
   createSpecialCollection,
@@ -10,6 +11,12 @@ import {
   getUnpaidForSpecial,
   recordPayment,
 } from './billing';
+import { createDatabaseBackup, restoreDatabaseBackup } from './backup';
+import { getReportData } from './reportData';
+import { buildReportWorkbook, writeReportWorkbook } from './reportExcel';
+import { buildReportPdfHtml } from './reportPdf';
+import { buildSheetRows } from './sheetRows';
+import { unzipSync, strFromU8 } from 'fflate';
 
 export interface SelfTestResult {
   name: string;
@@ -145,6 +152,93 @@ export async function runSelfTest(): Promise<SelfTestResult[]> {
         const testRows = unpaid.filter((row) => apartmentIds.includes(row.apartmentId));
         assert(testRows.length === 3, `تم العثور على ${testRows.length} من 3 رسوم.`);
         assert(testRows.every((row) => row.due === 75 && row.remaining === 75), 'قيمة التحصيل الخاص غير صحيحة.');
+      });
+
+      await check('تطابق إجماليات PDF وExcel والجدول', async () => {
+        const report = await getReportData({ kind: 'month', value: month });
+        const pdfHtml = buildReportPdfHtml(report);
+        const workbook = buildReportWorkbook(report);
+        const workbookFiles = unzipSync(writeReportWorkbook(report));
+        const sheetSnapshot = buildSheetRows(report);
+        const summarySheet = workbook.Sheets['الملخص'];
+        const excelTotals = [
+          Number(summarySheet?.B4?.v ?? NaN),
+          Number(summarySheet?.B5?.v ?? NaN),
+          Number(summarySheet?.B6?.v ?? NaN),
+          Number(summarySheet?.B7?.v ?? NaN),
+          Number(summarySheet?.B8?.v ?? NaN),
+        ];
+        const reportTotals = [
+          report.summary.collected,
+          report.summary.specialCollected,
+          report.summary.adjustments,
+          report.summary.totalExpenses,
+          report.summary.balance,
+        ];
+        assert(
+          reportTotals.every((total, index) => excelTotals[index] === total),
+          'إجماليات Excel لا تطابق بيانات التقرير.',
+        );
+        assert(
+          reportTotals.every((total) => pdfHtml.includes(total.toLocaleString('en-US', { maximumFractionDigits: 2 }))),
+          'بعض إجماليات PDF غير موجودة في التقرير.',
+        );
+        assert(
+          sheetSnapshot.summary.collectedFromPayments === report.summary.collected,
+          'إجمالي التحصيل في الجدول لا يطابق التقرير.',
+        );
+        assert(
+          sheetSnapshot.summary.specialCollectionsCollected === report.summary.specialCollected
+            && sheetSnapshot.summary.netAdjustments === report.summary.adjustments
+            && sheetSnapshot.summary.totalExpenses === report.summary.totalExpenses,
+          'إجماليات الجدول لا تطابق بيانات التقرير.',
+        );
+        assert(
+          sheetSnapshot.summary.balance === report.summary.balance,
+          'الرصيد في الجدول لا يطابق التقرير.',
+        );
+        assert(
+          sheetSnapshot.apartments.length === report.activeApartments.length,
+          'قائمة الشقق النشطة في الجدول غير مكتملة.',
+        );
+        const generatedSheets = Object.keys(workbookFiles)
+          .filter((path) => /^xl\/worksheets\/sheet\d+\.xml$/.test(path))
+          .map((path) => strFromU8(workbookFiles[path]));
+        assert(
+          generatedSheets.length === 8 && generatedSheets.every((xml) => xml.includes('rightToLeft="1"') && xml.includes('state="frozen"')),
+          'اتجاه RTL أو تجميد صف العناوين غير موجود في ملف Excel.',
+        );
+        assert(
+          strFromU8(workbookFiles['xl/styles.xml']).includes('<b'),
+          'تنسيق العناوين العريض غير موجود في ملف Excel.',
+        );
+        const emptyMonthReport = await getReportData({ kind: 'month', value: '0001-01' });
+        const emptyMonthPdf = buildReportPdfHtml(emptyMonthReport);
+        assert(
+          emptyMonthReport.payments.length === 0 && emptyMonthReport.expenses.length === 0
+            && emptyMonthPdf.includes('لا توجد بيانات في هذه الفترة.'),
+          'لم ينجح إنشاء تقرير PDF لفترة فارغة.',
+        );
+      });
+
+      await check('نسخة احتياطية واستعادة وإجمالي مطابق', async () => {
+        const before = await getReportData({ kind: 'all' });
+        const backup = await createDatabaseBackup();
+        await setSetting('building_name', `تغيير مؤقت ${runId}`);
+        await restoreDatabaseBackup(backup);
+        const after = await getReportData({ kind: 'all' });
+        assert(
+          JSON.stringify(before.summary) === JSON.stringify(after.summary),
+          'تغيرت الإجماليات بعد استعادة النسخة الاحتياطية.',
+        );
+        assert(
+          JSON.stringify(before.apartments) === JSON.stringify(after.apartments),
+          'تغيرت بيانات الشقق بعد استعادة النسخة الاحتياطية.',
+        );
+        assert(
+          before.buildingName === after.buildingName,
+          'لم تعد بيانات العمارة إلى حالتها السابقة بعد الاستعادة.',
+        );
       });
     }
   } finally {

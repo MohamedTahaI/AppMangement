@@ -1,6 +1,8 @@
+import { SectionHeader } from '@/components/ui/SectionHeader';
+import { AppText } from '@/components/ui/AppText';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Card } from '@/components/ui/Card';
 import { BigButton } from '@/components/ui/BigButton';
@@ -80,7 +82,7 @@ export default function OverdueScreen() {
       <SegmentedControl<Mode>
         value={mode}
         options={[
-          { value: 'monthly', label: 'الاشتراك الشهري' },
+          { value: 'monthly', label: 'الفاتورة الشهرية' },
           { value: 'special', label: 'تحصيل خاص' },
         ]}
         onChange={setMode}
@@ -99,40 +101,52 @@ export default function OverdueScreen() {
             { value: 'apartment', label: 'رقم الشقة' },
             { value: 'remaining', label: 'أكبر متبقي' },
           ]}
+          defaultSort="remaining"
           onSortChange={setSort}
           resultCount={visibleRows.length}
           totalCount={rows.length}
           totalAmount={visibleRows.reduce((sum, row) => sum + row.remaining, 0)}
-          onClear={() => { setSearch(''); setStatusFilter('all'); setSort('remaining'); }}
+          onClear={() => { setSearch(''); setStatusFilter('all'); setSort('remaining'); setMonth(getCurrentMonth()); }}
         />
       ) : (
         <View style={styles.collectionPicker}>
-          <Text style={styles.sectionTitle}>اختر التحصيل الخاص</Text>
-          {collections.length === 0 ? (
-            <EmptyState message="لا توجد تحصيلات خاصة نشطة." />
+          <SectionHeader title="اختر التحصيل الخاص" />
+          {loading ? (
+            <Skeleton height={theme.sizes.skeletonRow} />
+          ) : collections.length === 0 ? (
+            <EmptyState
+              message="لا توجد تحصيلات خاصة نشطة. أنشئ تحصيلاً جديداً للبدء."
+              actionLabel="تحصيل جديد"
+              onAction={() => router.push({ pathname: '/specials', params: { create: '1' } })}
+            />
           ) : (
-            collections.map((collection) => {
-              const selected = specialId === collection.id;
-              return (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                  key={collection.id}
-                  onPress={() => setSpecialId(collection.id)}
-                  style={[styles.collectionChoice, selected && styles.collectionSelected]}>
-                  <Text style={[styles.collectionText, selected && styles.collectionTextSelected]}>
-                    {collection.title}
-                  </Text>
-                </Pressable>
-              );
-            })
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.collectionChoices}>
+              {collections.map((collection) => {
+                const selected = specialId === collection.id;
+                return (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    key={collection.id}
+                    onPress={() => setSpecialId(collection.id)}
+                    style={[styles.collectionChoice, selected && styles.collectionSelected]}>
+                    <AppText style={[styles.collectionText, selected && styles.collectionTextSelected]}>
+                      {collection.title}
+                    </AppText>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
           )}
         </View>
       )}
       {mode === 'special' && selectedSpecial ? (
-        <Text style={styles.context}>المتأخرون في: {selectedSpecial.title}</Text>
+        <AppText style={styles.context}>المتأخرون في: {selectedSpecial.title}</AppText>
       ) : null}
-      {mode === 'special' ? (
+      {mode === 'special' && selectedSpecial ? (
         <FilterBar
           search={search}
           onSearchChange={setSearch}
@@ -143,6 +157,7 @@ export default function OverdueScreen() {
             { value: 'apartment', label: 'رقم الشقة' },
             { value: 'remaining', label: 'أكبر متبقي' },
           ]}
+          defaultSort="remaining"
           onSortChange={setSort}
           resultCount={visibleRows.length}
           totalCount={rows.length}
@@ -150,8 +165,8 @@ export default function OverdueScreen() {
           onClear={() => { setSearch(''); setStatusFilter('all'); setSort('remaining'); }}
         />
       ) : null}
-      <MonthTransition month={month}>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {mode === 'monthly' || selectedSpecial ? <MonthTransition month={month}>
+      {error ? <AppText style={styles.error}>{error}</AppText> : null}
       {loading ? (
         <View style={styles.loadingList}>
           <Skeleton height={theme.sizes.skeletonRow} />
@@ -181,18 +196,18 @@ export default function OverdueScreen() {
                     row.status === 'partial' && styles.avatarPartial,
                     row.status === 'unpaid' && styles.avatarUnpaid,
                   ]}>
-                  <Text style={[
+                  <AppText style={[
                     styles.apartmentAvatarText,
                     row.status === 'paid' && styles.avatarTextPaid,
                     row.status === 'partial' && styles.avatarTextPartial,
                     row.status === 'unpaid' && styles.avatarTextUnpaid,
-                  ]}>{row.apartmentNumber}</Text>
+                  ]}>{row.apartmentNumber}</AppText>
                 </View>
-                <Text style={styles.apartmentOwner}>{row.ownerName || 'اسم المالك غير مسجل'}</Text>
+                <AppText style={styles.apartmentOwner}>{row.ownerName || 'اسم المالك غير مسجل'}</AppText>
                 <StatusChip status={row.status} />
               </View>
               <View style={styles.remaining}>
-                <Text style={styles.owner}>المتبقي</Text>
+                <AppText style={styles.owner}>المتبقي</AppText>
                 <MoneyText amount={row.remaining} size={theme.typography.section} />
               </View>
             </View>
@@ -214,7 +229,7 @@ export default function OverdueScreen() {
           />
         </Card>
       )) : null}
-      </MonthTransition>
+      </MonthTransition> : null}
     </ScrollView>
   );
 }
@@ -242,13 +257,15 @@ const styles = StyleSheet.create({
   collectionPicker: {
     gap: theme.spacingScale.xs,
   },
+  collectionChoices: { gap: theme.spacingScale.xs, paddingVertical: theme.spacingScale.xs },
   sectionTitle: {
     color: theme.colors.text,
     fontSize: theme.typography.section,
     fontFamily: theme.typography.extraBold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   collectionChoice: {
+    width: theme.sizes.specialCardWidth,
     minHeight: theme.sizes.touch,
     paddingHorizontal: theme.spacingScale.sm,
     justifyContent: 'center',
@@ -264,7 +281,7 @@ const styles = StyleSheet.create({
   collectionText: {
     color: theme.colors.text,
     fontSize: theme.typography.body,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   collectionTextSelected: {
     color: theme.colors.primary,
@@ -273,12 +290,12 @@ const styles = StyleSheet.create({
   context: {
     color: theme.colors.secondaryText,
     fontSize: theme.typography.body,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   error: {
     color: theme.colors.danger,
     fontSize: theme.typography.body,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   loadingList: {
     gap: theme.spacingScale.xs,
@@ -313,7 +330,7 @@ const styles = StyleSheet.create({
   avatarTextPaid: { color: theme.colors.success },
   avatarTextPartial: { color: theme.colors.warning },
   avatarTextUnpaid: { color: theme.colors.danger },
-  apartmentOwner: { color: theme.colors.text, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'right' },
+  apartmentOwner: { color: theme.colors.text, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'auto' },
   apartmentName: {
     color: theme.colors.text,
     fontSize: theme.typography.section,
@@ -322,7 +339,7 @@ const styles = StyleSheet.create({
   owner: {
     color: theme.colors.secondaryText,
     fontSize: theme.typography.body,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   remaining: {
     alignItems: 'flex-end',

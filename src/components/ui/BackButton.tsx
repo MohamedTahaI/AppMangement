@@ -1,5 +1,6 @@
+import { AppText } from '@/components/ui/AppText';
 import { MaterialIcons } from '@expo/vector-icons';
-import { I18nManager, Pressable, StyleSheet, Text, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { I18nManager, Pressable, StyleSheet, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 
 import { theme } from '@/theme';
 
@@ -22,7 +23,7 @@ export function BackButton({ label, onPress, style, labelStyle }: BackButtonProp
         size={theme.sizes.icon}
         color={theme.colors.primary}
       />
-      <Text style={[styles.label, labelStyle]}>{label}</Text>
+      <AppText style={[styles.label, labelStyle]}>{label}</AppText>
     </Pressable>
   );
 }

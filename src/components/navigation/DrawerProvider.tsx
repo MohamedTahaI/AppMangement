@@ -1,17 +1,9 @@
+import { AppText } from '@/components/ui/AppText';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, usePathname, useRouter, useSegments, type Href } from 'expo-router';
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import {
-  Animated,
-  PanResponder,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  View,
-} from 'react-native';
+import { Animated, PanResponder, Pressable, ScrollView, StyleSheet, Switch, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 
@@ -42,7 +34,7 @@ const GROUPS: { title: string; links: DrawerLink[] }[] = [
   {
     title: 'التحصيل',
     links: [
-      { label: 'الاشتراك الشهري', icon: 'payments', route: '/(tabs)/collection' },
+      { label: 'الفاتورة الشهرية', icon: 'payments', route: '/(tabs)/collection' },
       { label: 'التحصيلات الخاصة', icon: 'account-balance-wallet', route: '/specials' },
       { label: 'المتأخرين', icon: 'warning-amber', route: '/overdue' },
     ],
@@ -65,8 +57,8 @@ const GROUPS: { title: string; links: DrawerLink[] }[] = [
     title: 'الإدارة',
     links: [
       { label: 'الشقق', icon: 'apartment', route: '/apartments' },
-      { label: 'قيمة الاشتراك الشهري', icon: 'price-change', route: '/fee' },
-      { label: 'تعديل المبلغ الكلي (تسوية)', icon: 'tune', route: '/adjustments' },
+      { label: 'قيمة الفاتورة الشهرية', icon: 'price-change', route: '/fee' },
+      { label: 'تعديل الرصيد', icon: 'tune', route: '/adjustments' },
     ],
   },
   {
@@ -111,6 +103,7 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
   const segments = useSegments();
   const motion = useMotion();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
   const [visible, setVisible] = useState(false);
   const [buildingName, setBuildingName] = useState('');
   const [apartmentCount, setApartmentCount] = useState(0);
@@ -122,7 +115,7 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
   });
   const [error, setError] = useState<string | null>(null);
   const [drawerWidth, setDrawerWidth] = useState<number>(theme.sizes.drawerWidth);
-  const [translateX] = useState(() => new Animated.Value(-theme.sizes.drawerMaxWidth));
+  const [translateX] = useState(() => new Animated.Value(theme.sizes.drawerMaxWidth));
 
   const openDrawer = useCallback(() => {
     setVisible(true);
@@ -135,7 +128,7 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
 
   const closeDrawer = useCallback(() => {
     Animated.timing(translateX, {
-      toValue: -drawerWidth,
+      toValue: drawerWidth,
       duration: motion.enabled ? motion.durations.normal : 0,
       useNativeDriver: true,
     }).start(({ finished }) => {
@@ -167,12 +160,12 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
   const edgeSwipe = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => false,
     onMoveShouldSetPanResponder: (event, gesture) =>
-      DRAWER_SIDE === 'left' && event.nativeEvent.pageX <= 28 && gesture.dx > 18
+      DRAWER_SIDE === 'right' && event.nativeEvent.pageX >= screenWidth - 28 && gesture.dx < -18
       && Math.abs(gesture.dy) < 30,
     onPanResponderRelease: (_event, gesture) => {
-      if (gesture.dx > 50) openDrawer();
+      if (gesture.dx < -50) openDrawer();
     },
-  }), [openDrawer]);
+  }), [openDrawer, screenWidth]);
 
   const value = useMemo(() => ({ openDrawer, closeDrawer }), [closeDrawer, openDrawer]);
 
@@ -195,9 +188,9 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
       <View style={styles.root} {...edgeSwipe.panHandlers}>
         <View style={[styles.appHeader, { height: 58 + insets.top, paddingTop: insets.top }]}>
           <MenuButton />
-          <Text numberOfLines={1} style={styles.appHeaderTitle}>
+          <AppText numberOfLines={1} style={styles.appHeaderTitle}>
             {buildingName || 'مدير العمارة'}
-          </Text>
+          </AppText>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`حالة المزامنة: ${syncLabel(syncStatus)}${syncStatus.error ? `: ${syncStatus.error}` : ''}`}
@@ -228,8 +221,8 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={[styles.drawerHeader, { paddingTop: insets.top + theme.spacingScale.md }]}>
-                  <Text style={styles.buildingName}>{buildingName || 'مدير العمارة'}</Text>
-                  <Text style={styles.headerMeta}>{apartmentCount} شقة</Text>
+                  <AppText style={styles.buildingName}>{buildingName || 'مدير العمارة'}</AppText>
+                  <AppText style={styles.headerMeta}>{apartmentCount} شقة</AppText>
                   <View style={styles.syncLine}>
                     <View style={[
                       styles.syncDot,
@@ -237,14 +230,14 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
                       syncStatus.state === 'waiting' && styles.waiting,
                       syncStatus.state === 'failed' && styles.failed,
                     ]} />
-                    <Text style={styles.headerMeta}>{syncLabel(syncStatus)}</Text>
-                    {syncStatus.error ? <Text style={styles.headerMeta}>{syncStatus.error}</Text> : null}
+                    <AppText style={styles.headerMeta}>{syncLabel(syncStatus)}</AppText>
+                    {syncStatus.error ? <AppText style={styles.headerMeta}>{syncStatus.error}</AppText> : null}
                   </View>
                 </LinearGradient>
-                {error ? <Text style={styles.error}>{error}</Text> : null}
+                {error ? <AppText style={styles.error}>{error}</AppText> : null}
                 {GROUPS.map((group) => (
                   <View key={group.title} style={styles.group}>
-                    <Text style={styles.groupTitle}>{group.title}</Text>
+                    <AppText style={styles.groupTitle}>{group.title}</AppText>
                     {group.links.map((link) => {
                       const active = Boolean(link.route && normalizeRoute(String(link.route)) === normalizeRoute(pathname));
                       return (
@@ -255,7 +248,7 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
                           onPress={() => activateLink(link)}
                           style={[styles.link, active && styles.linkActive]}>
                           <MaterialIcons name={link.icon} size={24} color={active ? theme.colors.primary : theme.colors.secondaryText} />
-                          <Text style={[styles.linkText, active && styles.linkTextActive]}>{link.label}</Text>
+                          <AppText style={[styles.linkText, active && styles.linkTextActive]}>{link.label}</AppText>
                           {link.action === 'reduce-motion' ? (
                             <Switch
                               value={reduceMotion}
@@ -301,7 +294,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     borderBottomWidth: theme.borderWidths.hairline,
     borderBottomColor: theme.colors.border,
-    direction: 'ltr',
   },
   appHeaderTitle: {
     flex: 1,
@@ -316,34 +308,35 @@ const styles = StyleSheet.create({
   scrim: { ...StyleSheet.absoluteFill, backgroundColor: theme.colors.overlay },
   drawer: {
     position: 'absolute',
-    left: 0,
+    start: 0,
     top: 0,
     bottom: 0,
     width: '84%',
     maxWidth: theme.sizes.drawerMaxWidth,
     backgroundColor: theme.colors.background,
-    borderTopRightRadius: theme.radii.md,
-    borderBottomRightRadius: theme.radii.md,
+    borderTopEndRadius: theme.radii.md,
+    borderBottomEndRadius: theme.radii.md,
     elevation: theme.shadows.drawer.elevation,
   },
-  drawerContent: { paddingBottom: theme.spacingScale.md },
+  drawerContent: { paddingBottom: theme.spacingScale.md, direction: 'rtl' },
   drawerHeader: {
     paddingHorizontal: theme.spacingScale.md,
     paddingBottom: theme.spacingScale.md,
     gap: theme.spacingScale.xs,
+    direction: 'rtl',
   },
-  buildingName: { color: theme.colors.onPrimary, fontSize: theme.typography.heading, fontFamily: theme.typography.extraBold, textAlign: 'right' },
-  headerMeta: { color: theme.colors.onPrimary, fontSize: theme.typography.small, fontFamily: theme.typography.medium, textAlign: 'right' },
+  buildingName: { color: theme.colors.onPrimary, fontSize: theme.typography.heading, fontFamily: theme.typography.extraBold, textAlign: 'auto' },
+  headerMeta: { color: theme.colors.onPrimary, fontSize: theme.typography.small, fontFamily: theme.typography.medium, textAlign: 'auto' },
   syncLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: theme.spacingScale.xs },
   syncDot: { width: 10, height: 10, borderRadius: theme.radii.pill, backgroundColor: theme.colors.unbound },
   synced: { backgroundColor: theme.colors.success },
   waiting: { backgroundColor: theme.colors.warning },
   failed: { backgroundColor: theme.colors.danger },
   group: { paddingHorizontal: theme.spacingScale.xs, paddingTop: theme.spacingScale.sm },
-  groupTitle: { paddingHorizontal: theme.spacingScale.xs, paddingBottom: theme.spacingScale.xs, color: theme.colors.muted, fontSize: theme.typography.small, fontFamily: theme.typography.bold, textAlign: 'left' },
+  groupTitle: { paddingHorizontal: theme.spacingScale.xs, paddingBottom: theme.spacingScale.xs, color: theme.colors.muted, fontSize: theme.typography.small, fontFamily: theme.typography.bold, textAlign: 'auto' },
   link: { minHeight: theme.sizes.touch, borderRadius: theme.radii.sm, paddingHorizontal: theme.spacingScale.xs, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: theme.spacingScale.xs },
   linkActive: { backgroundColor: theme.colors.paidBackground },
-  linkText: { flex: 1, color: theme.colors.text, fontSize: theme.typography.body, fontFamily: theme.typography.medium, textAlign: 'right' },
+  linkText: { flex: 1, color: theme.colors.text, fontSize: theme.typography.body, fontFamily: theme.typography.medium, textAlign: 'auto' },
   linkTextActive: { color: theme.colors.primary, fontFamily: theme.typography.bold },
   error: { marginHorizontal: theme.spacingScale.sm, marginTop: theme.spacingScale.xs, color: theme.colors.danger, fontSize: theme.typography.small, fontFamily: theme.typography.bold },
   menuButton: { width: theme.sizes.avatar, height: theme.sizes.iconBadge, alignItems: 'center', justifyContent: 'center' },

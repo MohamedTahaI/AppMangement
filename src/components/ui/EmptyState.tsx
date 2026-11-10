@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { AppText } from '@/components/ui/AppText';
+import { StyleSheet, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { useEffect } from 'react';
@@ -40,7 +41,7 @@ export function EmptyState({ message, actionLabel, onAction }: EmptyStateProps) 
           />
         </Svg>
       </Animated.View>
-      <Text style={styles.message}>{message}</Text>
+      <AppText style={styles.message}>{message}</AppText>
       {actionLabel && onAction ? <BigButton title={actionLabel} onPress={onAction} style={styles.action} /> : null}
     </View>
   );

@@ -1,13 +1,12 @@
+import { AppText } from '@/components/ui/AppText';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { AppBottomSheet } from '@/components/ui/AppBottomSheet';
 import { FilterBar, type FilterSortOption } from '@/components/ui/FilterBar';
-import { Card } from '@/components/ui/Card';
+import { ActivityRow, type ActivityType } from '@/components/ui/ActivityRow';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
-import { MoneyText } from '@/components/ui/MoneyText';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { getDatabase } from '@/db/schema';
@@ -42,7 +41,6 @@ export default function LedgerScreen() {
   const [toDate, setToDate] = useState('');
   const [sort, setSort] = useState('date');
   const [apartmentFilter, setApartmentFilter] = useState<number | null>(null);
-  const [apartmentPickerVisible, setApartmentPickerVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,7 +49,8 @@ export default function LedgerScreen() {
     try {
       const db = await getDatabase();
       const rows = await db.getAllAsync<LedgerEntry>(
-        `SELECT id, 'payment' AS type, p.paid_date AS date, p.amount,
+        `WITH ledger_entries AS (
+         SELECT p.id, 'payment' AS type, p.paid_date AS date, p.amount,
           c.apartment_id, a.number AS apartment_number, a.owner_name,
           p.note, CASE WHEN c.type = 'monthly' THEN c.month ELSE s.title END AS title,
           NULL AS status
@@ -60,16 +59,22 @@ export default function LedgerScreen() {
          LEFT JOIN special_collections s ON s.id = c.special_id
          WHERE p.deleted = 0
          UNION ALL
-         SELECT e.id, 'expense' AS type, e.expense_date AS date, e.amount,
+         SELECT e.id, 'expense' AS type, e.expense_date AS date, -e.amount AS amount,
           NULL, NULL, NULL, e.note, ec.name, NULL
          FROM expenses e JOIN expense_categories ec ON ec.id = e.category_id
          WHERE e.deleted = 0
          UNION ALL
-         SELECT id, 'adjustment' AS type, adjustment_date AS date,
-          CASE WHEN type = 'decrease' THEN -amount ELSE amount END,
-          NULL, NULL, NULL, reason, CASE WHEN type = 'increase' THEN 'زيادة' ELSE 'نقص' END, status
-         FROM adjustments
-         ORDER BY date DESC, id DESC`,
+         SELECT adj.id, 'adjustment' AS type, adj.adjustment_date AS date,
+          CASE WHEN adj.type = 'decrease' THEN -adj.amount ELSE adj.amount END AS amount,
+          NULL AS apartment_id, NULL AS apartment_number, NULL AS owner_name,
+          adj.reason AS note,
+          CASE WHEN adj.type = 'increase' THEN 'زيادة' ELSE 'نقص' END AS title,
+          adj.status AS status
+         FROM adjustments adj
+        )
+        SELECT id, type, date, amount, apartment_id, apartment_number, owner_name, note, title, status
+        FROM ledger_entries
+        ORDER BY date DESC, id DESC`,
       );
       setEntries(rows);
       setError(null);
@@ -102,82 +107,83 @@ export default function LedgerScreen() {
   ).sort((a, b) => a.number.localeCompare(b.number, undefined, { numeric: true }));
   const extraFilters = (
     <View style={styles.filterControls}>
-      <SegmentedControl<LedgerType>
-        value={type}
-        options={[
-          { value: 'all', label: 'الكل' },
-          { value: 'payment', label: 'دفعات' },
-          { value: 'expense', label: 'مصروفات' },
-          { value: 'adjustment', label: 'تسويات' },
-        ]}
-        onChange={setType}
-      />
-      <Pressable style={styles.apartmentFilter} onPress={() => setApartmentPickerVisible(true)}>
-        <Text style={styles.apartmentFilterText}>
-          {apartmentFilter === null ? 'كل الشقق' : `شقة ${apartmentOptions.find((item) => item.id === apartmentFilter)?.number ?? ''}`}
-        </Text>
-      </Pressable>
-      <AppBottomSheet
-        visible={apartmentPickerVisible}
-        title="تصفية حسب الشقة"
-        snapPoints={['55%']}
-        onClose={() => setApartmentPickerVisible(false)}>
-        <Pressable style={styles.apartmentOption} onPress={() => { setApartmentFilter(null); setApartmentPickerVisible(false); }}>
-          <Text style={styles.apartmentFilterText}>كل الشقق</Text>
+      <AppText style={styles.filterTitle}>الشقة</AppText>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.apartmentOptions}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ selected: apartmentFilter === null }}
+          style={[styles.apartmentOption, apartmentFilter === null && styles.apartmentOptionSelected]}
+          onPress={() => setApartmentFilter(null)}>
+          <AppText style={styles.apartmentFilterText}>كل الشقق</AppText>
         </Pressable>
         {apartmentOptions.map((item) => (
-          <Pressable key={item.id} style={styles.apartmentOption} onPress={() => { setApartmentFilter(item.id); setApartmentPickerVisible(false); }}>
-            <Text style={styles.apartmentFilterText}>شقة {item.number}</Text>
+          <Pressable
+            key={item.id}
+            accessibilityRole="button"
+            accessibilityState={{ selected: apartmentFilter === item.id }}
+            style={[styles.apartmentOption, apartmentFilter === item.id && styles.apartmentOptionSelected]}
+            onPress={() => setApartmentFilter(item.id)}>
+            <AppText style={styles.apartmentFilterText}>شقة {item.number}</AppText>
           </Pressable>
         ))}
-      </AppBottomSheet>
+      </ScrollView>
     </View>
   );
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <ScreenHeader title="سجل العمليات" subtitle="الدفعات والمصروفات والتسويات" />
+      <ScreenHeader title="سجل العمليات" subtitle="الدفعات والمصروفات وتعديلات الرصيد" />
       <FilterBar
         search={search}
         onSearchChange={setSearch}
         fromDate={fromDate}
         toDate={toDate}
         onDateRangeChange={(from, to) => { setFromDate(from); setToDate(to); }}
+        defaultSort="date"
         sort={sort}
         sortOptions={SORT_OPTIONS}
         onSortChange={setSort}
         resultCount={visible.length}
         totalCount={entries.length}
         totalAmount={total}
+        mainFilters={
+          <SegmentedControl<LedgerType>
+            value={type}
+            options={[
+              { value: 'all', label: 'الكل' },
+              { value: 'payment', label: 'دفعات' },
+              { value: 'expense', label: 'مصروفات' },
+              { value: 'adjustment', label: 'تعديل الرصيد' },
+            ]}
+            onChange={setType}
+          />
+        }
         extraFilters={extraFilters}
         extraFilterCount={Number(type !== 'all') + Number(apartmentFilter !== null)}
         onClear={() => { setSearch(''); setType('all'); setApartmentFilter(null); setFromDate(''); setToDate(''); setSort('date'); }}
       />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <AppText style={styles.error}>{error}</AppText> : null}
       {loading ? <><Skeleton /><Skeleton /></> : null}
       {!loading && visible.length === 0 ? <EmptyState message="لا توجد عمليات تطابق الفلاتر." /> : null}
       {!loading ? visible.map((entry) => (
-        <Pressable
+        <ActivityRow
           key={`${entry.type}-${entry.id}`}
-          disabled={entry.apartment_id === null}
-          onPress={() => {
-            if (entry.apartment_id !== null) {
-              router.push({
-                pathname: '/apartment-account/[id]',
-                params: { id: String(entry.apartment_id) },
-              });
-            }
-          }}>
-          <Card style={styles.row}>
-            <View style={styles.details}>
-              <Text style={styles.title}>
-                {entry.type === 'payment' ? `دفعة — شقة ${entry.apartment_number} — ${entry.title}` : entry.type === 'expense' ? `مصروف — ${entry.title}` : `تسوية — ${entry.title}${entry.status === 'cancelled' ? ' (ملغية)' : ''}`}
-              </Text>
-              <Text style={styles.meta}>{entry.date}{entry.note ? ` · ${entry.note}` : ''}</Text>
-            </View>
-            <MoneyText amount={entry.amount} size={theme.typography.section} />
-          </Card>
-        </Pressable>
+          type={entry.type as ActivityType}
+          title={entry.type === 'payment'
+            ? `شقة ${entry.apartment_number} — ${entry.title}`
+            : entry.type === 'expense'
+              ? entry.title
+              : `${entry.title}${entry.status === 'cancelled' ? ' (ملغى)' : ''}`}
+          date={entry.date}
+          note={entry.note}
+          amount={entry.amount}
+          onPress={entry.apartment_id === null
+            ? undefined
+            : () => router.push({
+              pathname: '/apartment-account/[id]',
+              params: { id: String(entry.apartment_id) },
+            })}
+        />
       )) : null}
     </ScrollView>
   );
@@ -185,13 +191,11 @@ export default function LedgerScreen() {
 
 const styles = StyleSheet.create({
   container: { flexGrow: 1, padding: theme.spacingScale.screen, gap: theme.spacingScale.sm, paddingBottom: theme.spacingScale.lg, backgroundColor: theme.colors.background, writingDirection: 'rtl' },
-  error: { color: theme.colors.danger, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'right' },
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacingScale.xs },
-  details: { flex: 1, alignItems: 'flex-end', gap: theme.spacingScale.xs },
-  title: { color: theme.colors.text, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'right' },
-  meta: { color: theme.colors.secondaryText, fontSize: theme.typography.small, fontFamily: theme.typography.fontFamily, textAlign: 'right' },
+  error: { color: theme.colors.danger, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'auto' },
   filterControls: { gap: theme.spacingScale.xs },
-  apartmentFilter: { minHeight: theme.sizes.touch, justifyContent: 'center', paddingHorizontal: theme.spacingScale.xs, borderWidth: theme.borderWidths.hairline, borderColor: theme.colors.border, borderRadius: theme.radii.sm, backgroundColor: theme.colors.surface },
-  apartmentFilterText: { color: theme.colors.text, fontSize: theme.typography.small, fontFamily: theme.typography.bold, textAlign: 'right' },
-  apartmentOption: { minHeight: theme.sizes.touchCompact, justifyContent: 'center', paddingHorizontal: theme.spacingScale.xs, borderBottomWidth: theme.borderWidths.hairline, borderBottomColor: theme.colors.border },
+  filterTitle: { color: theme.colors.text, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'auto' },
+  apartmentOptions: { gap: theme.spacingScale.xs, paddingVertical: theme.spacingScale.xs },
+  apartmentFilterText: { color: theme.colors.text, fontSize: theme.typography.small, fontFamily: theme.typography.bold, textAlign: 'auto' },
+  apartmentOption: { minHeight: theme.sizes.touch, justifyContent: 'center', paddingHorizontal: theme.spacingScale.sm, borderWidth: theme.borderWidths.hairline, borderColor: theme.colors.border, borderRadius: theme.radii.sm, backgroundColor: theme.colors.surface },
+  apartmentOptionSelected: { backgroundColor: theme.colors.paidBackground, borderColor: theme.colors.primary },
 });

@@ -1,13 +1,7 @@
+import { AppText } from '@/components/ui/AppText';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  View,
-} from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 
 import {
   addExpenseCategory,
@@ -115,21 +109,21 @@ export default function ExpenseCategoriesScreen() {
         <BackButton onPress={() => router.back()} label="رجوع" />
         <ScreenTitle title="أنواع المصروفات" subtitle="إضافة الأنواع أو تعديلها أو إخفاؤها" />
         <BigButton title="إضافة نوع مصروف" onPress={openNew} />
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {loading ? <Text style={styles.message}>جارٍ تحميل الأنواع...</Text> : null}
+        {error ? <AppText style={styles.error}>{error}</AppText> : null}
+        {loading ? <AppText style={styles.message}>جارٍ تحميل الأنواع...</AppText> : null}
         {!loading && categories.length === 0 ? (
           <EmptyState message="لا توجد أنواع مصروفات ظاهرة." />
         ) : null}
         {categories.map((category) => (
           <Card key={category.id}>
-            <Text style={styles.categoryName}>{category.name}</Text>
-            <Text style={styles.kind}>{category.is_fixed ? 'مصروف ثابت شهري' : 'مصروف آخر'}</Text>
+            <AppText style={styles.categoryName}>{category.name}</AppText>
+            <AppText style={styles.kind}>{category.is_fixed ? 'مصروف ثابت شهري' : 'مصروف آخر'}</AppText>
             <View style={styles.actions}>
               <Pressable style={styles.actionButton} onPress={() => openEdit(category)}>
-                <Text style={styles.actionText}>تعديل</Text>
+                <AppText style={styles.actionText}>تعديل</AppText>
               </Pressable>
               <Pressable style={styles.actionButton} onPress={() => setPendingHide(category)}>
-                <Text style={styles.hideText}>إخفاء</Text>
+                <AppText style={styles.hideText}>إخفاء</AppText>
               </Pressable>
             </View>
           </Card>
@@ -143,7 +137,7 @@ export default function ExpenseCategoriesScreen() {
         onClose={() => setEditorVisible(false)}>
         <FormField label="اسم النوع" value={name} onChangeText={setName} />
         <View style={styles.switchRow}>
-          <Text style={styles.switchLabel}>مصروف ثابت كل شهر</Text>
+          <AppText style={styles.switchLabel}>مصروف ثابت كل شهر</AppText>
           <Switch
             value={isFixed}
             onValueChange={setIsFixed}
@@ -151,7 +145,7 @@ export default function ExpenseCategoriesScreen() {
             accessibilityLabel="مصروف ثابت كل شهر"
           />
         </View>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? <AppText style={styles.error}>{error}</AppText> : null}
         <BigButton title="حفظ" loading={saving} onPress={() => void save()} />
         <BigButton
           title="إلغاء"
@@ -205,13 +199,13 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontSize: theme.typography.section,
     fontFamily: theme.typography.extraBold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   kind: {
     color: theme.colors.secondaryText,
     fontSize: theme.typography.body,
     fontFamily: theme.typography.fontFamily,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   actions: {
     flexDirection: 'row',
@@ -243,7 +237,7 @@ const styles = StyleSheet.create({
     color: theme.colors.danger,
     fontSize: theme.typography.body,
     fontFamily: theme.typography.bold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   switchRow: {
     minHeight: theme.sizes.touchMedium,
@@ -256,6 +250,6 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontSize: theme.typography.body,
     fontFamily: theme.typography.bold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
 });

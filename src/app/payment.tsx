@@ -1,7 +1,10 @@
+import { SectionHeader } from '@/components/ui/SectionHeader';
+import { formatDate } from '@/services/dateFormat';
+import { AppText } from '@/components/ui/AppText';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
-import { I18nManager, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { listApartmentPayments, softDeletePayment, type ApartmentPayment } from '@/db/payments';
 import { listApartments, type Apartment } from '@/db/apartments';
@@ -40,6 +43,7 @@ export default function PaymentScreen() {
   const initialMonth = params.month ?? localToday().slice(0, 7);
   const [apartment, setApartment] = useState<Apartment | null>(null);
   const [year, setYear] = useState(Number(initialMonth.slice(0, 4)));
+  const currentYear = new Date().getFullYear();
   const [months, setMonths] = useState<ApartmentMonthPreview[]>([]);
   const [selectedMonths, setSelectedMonths] = useState<string[]>([initialMonth]);
   const [amount, setAmount] = useState('');
@@ -184,16 +188,22 @@ export default function PaymentScreen() {
           subtitle={apartment ? `شقة ${apartment.number}${apartment.owner_name ? ` - ${apartment.owner_name}` : ''}` : ''}
         />
         <Card style={styles.yearCard}>
-          <Pressable accessibilityRole="button" onPress={() => changeYear(-1)} style={styles.yearArrow}>
-            <MaterialIcons name={I18nManager.isRTL ? 'chevron-right' : 'chevron-left'} size={theme.sizes.iconLarge} color={theme.colors.primary} />
+          <Pressable accessibilityRole="button" accessibilityLabel="السنة السابقة" onPress={() => changeYear(-1)} style={styles.yearArrow}>
+            <MaterialIcons name="chevron-right" size={theme.sizes.iconLarge} color={theme.colors.primary} />
           </Pressable>
-          <Text style={styles.yearText}>{year}</Text>
-          <Pressable accessibilityRole="button" onPress={() => changeYear(1)} style={styles.yearArrow}>
-            <MaterialIcons name={I18nManager.isRTL ? 'chevron-left' : 'chevron-right'} size={theme.sizes.iconLarge} color={theme.colors.primary} />
+          <AppText style={styles.yearText}>{year}</AppText>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="السنة التالية"
+            accessibilityState={{ disabled: year >= currentYear }}
+            disabled={year >= currentYear}
+            onPress={() => changeYear(1)}
+            style={[styles.yearArrow, year >= currentYear && styles.yearArrowDisabled]}>
+            <MaterialIcons name="chevron-left" size={theme.sizes.iconLarge} color={year >= currentYear ? theme.colors.muted : theme.colors.primary} />
           </Pressable>
         </Card>
-        <Text style={styles.sectionTitle}>اختر شهراً أو أكثر</Text>
-        {loading ? <Text style={styles.message}>جارٍ تحميل الشهور وسجل الدفعات...</Text> : null}
+        <SectionHeader title="اختر شهراً أو أكثر" />
+        {loading ? <AppText style={styles.message}>جارٍ تحميل الشهور وسجل الدفعات...</AppText> : null}
         {!loading && months.length === 0 ? (
           <EmptyState message="لا توجد اشتراكات مسجلة لهذه الشقة في هذه السنة." />
         ) : null}
@@ -217,10 +227,10 @@ export default function PaymentScreen() {
                     {checked ? <MaterialIcons name="check" size={theme.sizes.icon} color={theme.colors.onPrimary} /> : null}
                   </View>
                   <View style={styles.monthDetails}>
-                    <Text style={styles.monthName}>{getMonthLabel(preview.month)}</Text>
-                    <Text style={[styles.monthStatus, { color: statusColor }]}>
+                    <AppText style={styles.monthName}>{getMonthLabel(preview.month)}</AppText>
+                    <AppText style={[styles.monthStatus, { color: statusColor }]}>
                       {monthStatus(preview.status)}
-                    </Text>
+                    </AppText>
                   </View>
                   <MoneyText amount={preview.remaining} size={theme.typography.section} />
                 </View>
@@ -228,7 +238,7 @@ export default function PaymentScreen() {
             </Pressable>
           );
         })}
-        <Text style={styles.sectionTitle}>بيانات الدفع</Text>
+        <SectionHeader title="بيانات الدفع" />
         <FormField
           label="المبلغ"
           value={amount}
@@ -239,7 +249,7 @@ export default function PaymentScreen() {
           keyboardType="decimal-pad"
           placeholder="يُحسب من الشهور المحددة"
         />
-        <Text style={styles.helper}>المتبقي للشهور المحددة: {formatMoney(selectedBalance)}</Text>
+        <AppText style={styles.helper}>المتبقي للشهور المحددة: {formatMoney(selectedBalance)}</AppText>
         <FormField
           label="تاريخ الدفع"
           value={paidDate}
@@ -252,26 +262,26 @@ export default function PaymentScreen() {
           onChangeText={setNote}
           placeholder="اكتب ملاحظة"
         />
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {success ? <Text style={styles.success}>{success}</Text> : null}
+        {error ? <AppText style={styles.error}>{error}</AppText> : null}
+        {success ? <AppText style={styles.success}>{success}</AppText> : null}
         <BigButton
           title={saving ? 'جارٍ تسجيل الدفع...' : 'تسجيل الدفع'}
           onPress={() => void save()}
           disabled={saving || loading}
         />
-        <Text style={styles.sectionTitle}>سجل الدفعات</Text>
+        <SectionHeader title="سجل الدفعات" />
         {history.length === 0 ? <EmptyState message="لا توجد دفعات مسجلة لهذه الشقة." /> : null}
         {history.map((payment) => (
           <Card key={payment.id}>
             <View style={styles.historyRow}>
               <View style={styles.historyDetails}>
-                <Text style={styles.monthName}>
+                <AppText style={styles.monthName}>
                   {payment.type === 'monthly'
                     ? getMonthLabel(payment.month ?? '')
                     : payment.special_title ?? 'تحصيل خاص'}
-                </Text>
-                <Text style={styles.helper}>{payment.paid_date}</Text>
-                {payment.note ? <Text style={styles.helper}>{payment.note}</Text> : null}
+                </AppText>
+                <AppText style={styles.helper}>{formatDate(payment.paid_date)}</AppText>
+                {payment.note ? <AppText style={styles.helper}>{payment.note}</AppText> : null}
               </View>
               <MoneyText amount={payment.amount} size={theme.typography.section} />
             </View>
@@ -279,7 +289,7 @@ export default function PaymentScreen() {
               accessibilityRole="button"
               onPress={() => setPendingDelete(payment)}
               style={styles.deleteButton}>
-              <Text style={styles.deleteText}>حذف الدفعة</Text>
+              <AppText style={styles.deleteText}>حذف الدفعة</AppText>
             </Pressable>
           </Card>
         ))}
@@ -320,6 +330,7 @@ const styles = StyleSheet.create({
   },
   yearCard: {
     flexDirection: 'row',
+    direction: 'rtl',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
@@ -329,6 +340,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  yearArrowDisabled: { opacity: 0.55 },
   yearText: {
     color: theme.colors.text,
     fontSize: theme.typography.heading,
@@ -338,7 +350,7 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontSize: theme.typography.heading,
     fontFamily: theme.typography.extraBold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   message: {
     color: theme.colors.secondaryText,
@@ -359,12 +371,12 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontSize: theme.typography.body,
     fontFamily: theme.typography.bold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   monthStatus: {
     fontSize: theme.typography.body,
     fontFamily: theme.typography.bold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   checkbox: {
     width: theme.sizes.checkbox,
@@ -384,18 +396,18 @@ const styles = StyleSheet.create({
   helper: {
     color: theme.colors.secondaryText,
     fontSize: theme.typography.body,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   error: {
     color: theme.colors.danger,
     fontSize: theme.typography.body,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   success: {
     color: theme.colors.success,
     fontSize: theme.typography.body,
     fontFamily: theme.typography.bold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   historyRow: {
     flexDirection: 'row',

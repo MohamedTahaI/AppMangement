@@ -1,5 +1,6 @@
+import { AppText } from '@/components/ui/AppText';
 import { useEffect, useState } from 'react';
-import { Animated, StyleSheet, Text, type TextProps } from 'react-native';
+import { Animated, StyleSheet, type TextProps } from 'react-native';
 
 import { useMotion } from '@/hooks/useMotion';
 import { theme } from './theme';
@@ -46,10 +47,10 @@ export function AnimatedNumber({
   }, [animatedValue, duration, motion, suffix, value]);
 
   return (
-    <Text {...props} style={[styles.text, { fontSize: size }, style]}>
-      <Text>{displayValue}</Text>
-      {suffix ? <Text style={[styles.suffix, { color: suffixColor }]}>{suffix}</Text> : null}
-    </Text>
+    <AppText {...props} style={[styles.text, { fontSize: size }, style]}>
+      <AppText>{displayValue}</AppText>
+      {suffix ? <AppText style={[styles.suffix, { color: suffixColor }]}>{suffix}</AppText> : null}
+    </AppText>
   );
 }
 
@@ -57,7 +58,7 @@ const styles = StyleSheet.create({
   text: {
     color: theme.colors.text,
     fontFamily: theme.typography.extraBold,
-    textAlign: 'right',
+    textAlign: 'auto',
     writingDirection: 'rtl',
   },
   suffix: { fontSize: theme.typography.small, fontFamily: theme.typography.medium },

@@ -27,6 +27,18 @@ const TABLES = {
 type TableName = keyof typeof TABLES;
 type BackupRow = Record<string, string | number | null>;
 
+const TABLE_LABELS: Record<TableName, string> = {
+  apartments: 'الشقق',
+  fee_rates: 'أسعار الفواتير',
+  special_collections: 'التحصيلات الخاصة',
+  expense_categories: 'أنواع المصروفات',
+  charges: 'الفواتير المستحقة',
+  payments: 'الدفعات',
+  expenses: 'المصروفات',
+  adjustments: 'تعديلات الرصيد',
+  settings: 'الإعدادات',
+};
+
 export interface DatabaseBackup {
   formatVersion: number;
   createdAt: string;
@@ -47,34 +59,43 @@ export async function createDatabaseBackup(): Promise<DatabaseBackup> {
 }
 
 export function validateDatabaseBackup(value: unknown): DatabaseBackup {
-  if (!value || typeof value !== 'object') throw new Error('ملف النسخة الاحتياطية غير صالح.');
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('الملف ليس نسخة احتياطية من هذا التطبيق.');
+  }
   const backup = value as Partial<DatabaseBackup>;
+  if (typeof backup.formatVersion !== 'number') {
+    throw new Error('الملف ليس نسخة احتياطية من هذا التطبيق.');
+  }
+  if (backup.formatVersion > BACKUP_FORMAT_VERSION) {
+    throw new Error('نسخة الملف أحدث من التطبيق.');
+  }
   if (backup.formatVersion !== 1 && backup.formatVersion !== BACKUP_FORMAT_VERSION) {
-    throw new Error('إصدار ملف النسخة الاحتياطية غير مدعوم.');
+    throw new Error('إصدار نسخة الملف غير مدعوم من التطبيق.');
   }
   if (typeof backup.createdAt !== 'string' || Number.isNaN(Date.parse(backup.createdAt))) {
     throw new Error('تاريخ النسخة الاحتياطية غير صالح.');
   }
   if (!backup.tables || typeof backup.tables !== 'object') {
-    throw new Error('بيانات الجداول غير موجودة في ملف النسخة الاحتياطية.');
+    throw new Error('الملف ليس نسخة احتياطية من هذا التطبيق.');
   }
 
   const sourceTables = backup.tables as Partial<Record<TableName, BackupRow[]>>;
   const normalizedTables = { ...sourceTables, adjustments: sourceTables.adjustments ?? [] };
   for (const table of Object.keys(TABLES) as TableName[]) {
     const rows = normalizedTables[table];
-    if (!Array.isArray(rows)) throw new Error(`بيانات جدول ${table} غير صالحة.`);
+    const tableLabel = TABLE_LABELS[table];
+    if (!Array.isArray(rows)) throw new Error(`بيانات ${tableLabel} غير صالحة.`);
     const columns = TABLES[table] as readonly string[];
     for (const row of rows) {
       if (!row || typeof row !== 'object' || Array.isArray(row)) {
-        throw new Error(`يوجد سجل غير صالح في جدول ${table}.`);
+        throw new Error(`يوجد سجل غير صالح ضمن ${tableLabel}.`);
       }
       const rowObject = row as Record<string, unknown>;
       if (columns.some((column) => !(column in rowObject))) {
-        throw new Error(`أعمدة جدول ${table} غير مكتملة.`);
+        throw new Error(`بيانات ${tableLabel} ناقصة.`);
       }
       if (Object.keys(rowObject).some((column) => !columns.includes(column))) {
-        throw new Error(`يحتوي جدول ${table} على أعمدة غير معروفة.`);
+        throw new Error(`تحتوي بيانات ${tableLabel} على حقول غير معروفة.`);
       }
       if (
         Object.values(rowObject).some(
@@ -85,7 +106,7 @@ export function validateDatabaseBackup(value: unknown): DatabaseBackup {
             && typeof field !== 'boolean',
         )
       ) {
-        throw new Error(`قيمة غير صالحة في جدول ${table}.`);
+        throw new Error(`تحتوي بيانات ${tableLabel} على قيمة غير صالحة.`);
       }
     }
   }

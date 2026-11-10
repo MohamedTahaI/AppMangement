@@ -1,13 +1,7 @@
+import { AppText } from '@/components/ui/AppText';
 import { useState } from 'react';
 import { Redirect } from 'expo-router';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import type { SelfTestResult } from '@/services/selfTest';
 import { runSelfTest } from '@/services/selfTest';
@@ -35,10 +29,10 @@ export default function DevTestScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>اختبار قاعدة البيانات والتحصيل</Text>
-      <Text style={styles.description}>
-        يضيف الاختبار 3 شقق ورسوم شهرية بقيمة 400 ج، ثم يتحقق من الدفعات الشهرية والمقدمة والتحصيل الخاص.
-      </Text>
+      <AppText style={styles.title}>اختبار قاعدة البيانات والتحصيل</AppText>
+      <AppText style={styles.description}>
+        يختبر التحصيل والدفعات، وتطابق إجماليات PDF وExcel والجدول، ثم ينشئ نسخة احتياطية ويستعيدها ويتأكد من ثبات الإجماليات.
+      </AppText>
 
       <Pressable
         accessibilityRole="button"
@@ -48,19 +42,19 @@ export default function DevTestScreen() {
         {running ? (
           <ActivityIndicator color={theme.colors.onPrimary} />
         ) : (
-          <Text style={styles.buttonText}>شغّل الاختبار</Text>
+          <AppText style={styles.buttonText}>شغّل الاختبار</AppText>
         )}
       </Pressable>
 
-      {error ? <Text style={styles.error}>فشل الاختبار: {error}</Text> : null}
+      {error ? <AppText style={styles.error}>فشل الاختبار: {error}</AppText> : null}
       {results.map((result, index) => (
         <View
           key={`${result.name}-${index}`}
           style={[styles.result, result.passed ? styles.pass : styles.fail]}>
-          <Text style={styles.resultStatus}>{result.passed ? 'نجح' : 'فشل'}</Text>
+          <AppText style={styles.resultStatus}>{result.passed ? 'نجح' : 'فشل'}</AppText>
           <View style={styles.resultCopy}>
-            <Text style={styles.resultName}>{result.name}</Text>
-            <Text style={styles.resultDetail}>{result.detail}</Text>
+            <AppText style={styles.resultName}>{result.name}</AppText>
+            <AppText style={styles.resultDetail}>{result.detail}</AppText>
           </View>
         </View>
       ))}
@@ -80,14 +74,14 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontSize: theme.typography.title,
     fontFamily: theme.typography.bold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   description: {
     color: theme.colors.secondaryText,
     fontSize: theme.typography.body,
     lineHeight: theme.typography.lineHeightBody,
     fontFamily: theme.typography.fontFamily,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   button: {
     minHeight: theme.sizes.button,
@@ -112,7 +106,7 @@ const styles = StyleSheet.create({
     color: theme.colors.danger,
     fontSize: theme.typography.body,
     fontFamily: theme.typography.bold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   result: {
     flexDirection: 'row',
@@ -145,12 +139,12 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontSize: theme.typography.body,
     fontFamily: theme.typography.bold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   resultDetail: {
     color: theme.colors.secondaryText,
     fontSize: theme.typography.body,
     fontFamily: theme.typography.fontFamily,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
 });

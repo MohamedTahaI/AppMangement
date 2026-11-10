@@ -1,5 +1,6 @@
+import { AppText } from '@/components/ui/AppText';
 import { useEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import Svg, { Circle, Path } from 'react-native-svg';
 import Animated, { useAnimatedProps, useSharedValue, withTiming } from 'react-native-reanimated';
@@ -64,9 +65,9 @@ export function SuccessSheet({
             animatedProps={animatedProps}
           />
         </Svg>
-        <Text style={styles.title}>{title}</Text>
+        <AppText style={styles.title}>{title}</AppText>
         {amount !== undefined ? <MoneyText amount={amount} size={theme.typography.number} style={styles.amount} /> : null}
-        {message ? <Text style={styles.message}>{message}</Text> : null}
+        {message ? <AppText style={styles.message}>{message}</AppText> : null}
       </View>
     </AppBottomSheet>
   );

@@ -29,7 +29,7 @@ function validateDate(value: string): void {
     || Number.isNaN(parsed.getTime())
     || parsed.toISOString().slice(0, 10) !== value
   ) {
-    throw new Error('تاريخ التسوية غير صحيح.');
+    throw new Error('تاريخ تعديل الرصيد غير صحيح.');
   }
 }
 
@@ -44,12 +44,12 @@ export async function addAdjustment(values: NewAdjustment): Promise<number> {
   const reason = values.reason.trim();
   validateDate(values.adjustmentDate);
   if (values.type !== 'increase' && values.type !== 'decrease') {
-    throw new Error('نوع التسوية غير صحيح.');
+    throw new Error('نوع تعديل الرصيد غير صحيح.');
   }
   if (!Number.isFinite(values.amount) || values.amount <= 0) {
     throw new Error('أدخل مبلغاً أكبر من صفر.');
   }
-  if (reason.length < 3) throw new Error('سبب التسوية مطلوب (3 أحرف على الأقل).');
+  if (reason.length < 3) throw new Error('سبب تعديل الرصيد مطلوب (3 أحرف على الأقل).');
 
   const db = await getDatabase();
   let adjustmentId = 0;
@@ -63,7 +63,7 @@ export async function addAdjustment(values: NewAdjustment): Promise<number> {
          FROM adjustments WHERE status = 'active'`,
       );
       if (values.amount > (totals?.collected ?? 0)) {
-        throw new Error('لا يمكن أن يكون إجمالي التحصيل بعد التسوية أقل من صفر.');
+        throw new Error('لا يمكن أن يصبح إجمالي التحصيل بعد التعديل أقل من صفر.');
       }
     }
 
@@ -84,7 +84,7 @@ export async function addAdjustment(values: NewAdjustment): Promise<number> {
 
 export async function cancelAdjustment(id: number, cancelReason: string): Promise<void> {
   const reason = cancelReason.trim();
-  if (!Number.isInteger(id) || id < 1) throw new Error('رقم التسوية غير صحيح.');
+  if (!Number.isInteger(id) || id < 1) throw new Error('رقم تعديل الرصيد غير صحيح.');
   if (reason.length < 3) throw new Error('سبب الإلغاء مطلوب (3 أحرف على الأقل).');
 
   const db = await getDatabase();
@@ -93,7 +93,7 @@ export async function cancelAdjustment(id: number, cancelReason: string): Promis
       "SELECT type, amount FROM adjustments WHERE id = ? AND status = 'active'",
       id,
     );
-    if (!adjustment) throw new Error('التسوية غير موجودة أو سبق إلغاؤها.');
+    if (!adjustment) throw new Error('تعديل الرصيد غير موجود أو سبق إلغاؤه.');
     if (adjustment.type === 'increase') {
       const totals = await db.getFirstAsync<{ collected: number }>(
         `SELECT

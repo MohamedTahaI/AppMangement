@@ -1,6 +1,7 @@
+import { AppText } from '@/components/ui/AppText';
 import { useEffect } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
 import { useMotion } from '@/hooks/useMotion';
@@ -52,7 +53,7 @@ export function StatusChip({ status }: StatusChipProps) {
     <Animated.View style={[styles.container, { backgroundColor: BACKGROUNDS[status] }, animatedStyle]}>
       <View style={styles.content}>
         <MaterialIcons name={ICONS[status]} size={theme.sizes.iconSmall} color={COLORS[status]} />
-        <Text style={[styles.label, { color: COLORS[status] }]}>{LABELS[status]}</Text>
+        <AppText style={[styles.label, { color: COLORS[status] }]}>{LABELS[status]}</AppText>
       </View>
     </Animated.View>
   );

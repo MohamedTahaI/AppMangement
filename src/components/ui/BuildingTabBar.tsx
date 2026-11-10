@@ -1,7 +1,8 @@
+import { AppText } from '@/components/ui/AppText';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { BottomTabBarProps } from 'expo-router/build/react-navigation/bottom-tabs/types';
@@ -13,7 +14,7 @@ import { theme } from '@/theme';
 const TAB_ITEMS = {
   index: { label: 'الرئيسية', icon: 'home' },
   collection: { label: 'التحصيل', icon: 'payments' },
-  expenses: { label: 'المصروفات', icon: 'receipt-long' },
+  expenses: { label: 'المصاريف', icon: 'receipt-long' },
 } as const;
 
 export function BuildingTabBar({ state, descriptors, emitter, navigateToTab }: BottomTabBarProps) {
@@ -42,7 +43,7 @@ export function BuildingTabBar({ state, descriptors, emitter, navigateToTab }: B
   return (
     <>
       <View style={[styles.bar, { height: theme.sizes.tabBar + insets.bottom, paddingBottom: insets.bottom }]}>
-        {visualOrder.map((entry, orderIndex) => {
+        {visualOrder.map((entry) => {
           if (entry.type === 'drawer') {
             return (
               <Pressable
@@ -57,7 +58,7 @@ export function BuildingTabBar({ state, descriptors, emitter, navigateToTab }: B
                 <View style={styles.iconHolder}>
                   <MaterialIcons name="menu" size={theme.sizes.icon} color={theme.colors.secondaryText} />
                 </View>
-                <Text style={styles.label}>القائمة</Text>
+                <AppText style={styles.label}>القائمة</AppText>
               </Pressable>
             );
           }
@@ -103,9 +104,9 @@ export function BuildingTabBar({ state, descriptors, emitter, navigateToTab }: B
                   color={focused ? theme.colors.primary : theme.colors.secondaryText}
                 />
               </View>
-              <Text style={[styles.label, focused && styles.labelActive]} numberOfLines={1}>
+              <AppText style={[styles.label, focused && styles.labelActive]} numberOfLines={1}>
                 {options?.title ?? item.config.label}
-              </Text>
+              </AppText>
             </Pressable>
           );
         })}
@@ -120,29 +121,25 @@ const styles = StyleSheet.create({
     minHeight: theme.sizes.tabBar,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingHorizontal: theme.spacingScale.xs,
+    justifyContent: 'space-between',
     backgroundColor: theme.colors.surface,
     borderTopWidth: theme.borderWidths.hairline,
     borderTopColor: theme.colors.border,
     ...theme.shadows.card,
-    direction: 'ltr',
   },
-  item: { flex: 1, minHeight: theme.sizes.tabBar, alignItems: 'center', justifyContent: 'center' },
+  item: { width: '20%', minHeight: theme.sizes.tabBar, alignItems: 'center', justifyContent: 'center' },
   itemActive: {},
   iconHolder: { width: theme.sizes.avatar, height: theme.sizes.iconContainerHeight, alignItems: 'center', justifyContent: 'center', borderRadius: theme.radii.pill },
   iconHolderActive: { backgroundColor: theme.colors.successBackground },
   label: { color: theme.colors.secondaryText, fontSize: theme.typography.small, fontFamily: theme.typography.medium, textAlign: 'center' },
   labelActive: { color: theme.colors.primary, fontFamily: theme.typography.bold },
   addButton: {
-    width: 62,
+    width: '20%',
     height: theme.sizes.tabBar,
-    marginHorizontal: theme.spacingScale.xs,
     marginTop: -theme.spacingScale.md,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: theme.radii.pill,
-    ...theme.shadows.floating,
   },
-  addGradient: { width: '100%', height: '100%', borderRadius: theme.radii.pill, alignItems: 'center', justifyContent: 'center' },
+  addGradient: { width: theme.sizes.quickAddButton, height: theme.sizes.quickAddButton, borderRadius: theme.radii.pill, alignItems: 'center', justifyContent: 'center', ...theme.shadows.floating },
 });

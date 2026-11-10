@@ -42,7 +42,7 @@ Default non-fixed categories: صيانة، أخرى
 
 ## Business rules
 1. Monthly fee for month M = the fee_rates row with the latest effective_from <= M. Changing the fee affects only months from the chosen month onward; existing charges keep their old amount.
-2. Monthly charges: one per active apartment per month. Auto-create them for every month from start_month up to the current month when missing (run on app open and when a month is opened).
+2. Monthly invoices: one per active apartment per month. Auto-create them for every month from start_month up to the current month when missing (run on app open and when a month is opened).
 3. Advance payment: if the manager pays a future month, create that month's charge on the spot using that month's fee.
 4. One payment action can cover several months: the manager ticks months and enters an amount; the app distributes it oldest to newest, creating one payment row per charge.
 5. Partial payments allowed. Status: paid (paid >= due), partial (0 < paid < due), unpaid (paid = 0). Paying more than the remaining on a charge is not allowed (warn).
@@ -60,7 +60,7 @@ More tab: apartments, change monthly fee, expense categories, export (PDF/Excel)
 
 ## Google Sheet (written only by the Apps Script; tab names in Arabic)
 1. ملخص: building name, last update time, total collected, total expenses, balance, table per month (collected, expenses).
-2. الاشتراك الشهري YYYY: one row per apartment: number, owner, 12 month columns (amount paid; green = paid in full, orange = partial, red = due and unpaid, blank = not due yet), total paid, total remaining.
+2. الفاتورة الشهرية YYYY: one row per apartment: number, owner, 12 month columns (amount paid; green = paid in full, orange = partial, red = due and unpaid, blank = not due yet), total paid, total remaining.
 3. التحصيلات الخاصة: flat table: collection title, apartment, owner, due, paid, remaining, status. With a filter.
 4. المصروفات: date, category, amount, note, linked collection.
 5. سجل المدفوعات: date, apartment, owner, type, month/collection, amount.

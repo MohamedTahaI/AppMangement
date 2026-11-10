@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { I18nManager, StyleSheet, View, type ViewStyle } from 'react-native';
+import { StyleSheet, View, type ViewStyle } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { useMotion } from '@/hooks/useMotion';
@@ -22,7 +22,7 @@ export function ProgressBar({
 }: ProgressBarProps) {
   const motion = useMotion();
   const value = useSharedValue(0);
-  const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scaleX: value.value / 100 }] }));
+  const animatedStyle = useAnimatedStyle(() => ({ width: `${value.value}%` }));
 
   useEffect(() => {
     const target = Math.max(0, Math.min(100, progress));
@@ -39,8 +39,7 @@ export function ProgressBar({
           styles.fill,
           {
             backgroundColor: color,
-            [I18nManager.isRTL ? 'right' : 'left']: 0,
-            transformOrigin: `${I18nManager.isRTL ? 'right' : 'left'} center`,
+            start: 0,
           },
           animatedStyle,
         ]}
@@ -51,5 +50,5 @@ export function ProgressBar({
 
 const styles = StyleSheet.create({
   track: { width: '100%', overflow: 'hidden', borderRadius: theme.radii.pill, position: 'relative' },
-  fill: { width: '100%', height: '100%', borderRadius: theme.radii.pill, position: 'absolute', top: 0 },
+  fill: { height: '100%', borderRadius: theme.radii.pill, position: 'absolute', top: 0 },
 });

@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { AppText } from '@/components/ui/AppText';
+import { Pressable, StyleSheet, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 
 import { AppBottomSheet } from './AppBottomSheet';
@@ -44,7 +45,7 @@ export function ConfirmDialog({
       title={title}
       snapPoints={input ? ['55%', '80%'] : ['42%']}
       onClose={onCancel}>
-      <Text style={styles.message}>{message}</Text>
+      <AppText style={styles.message}>{message}</AppText>
       {input ? (
         <FormField
           label={input.label}
@@ -61,7 +62,7 @@ export function ConfirmDialog({
             onCancel();
           }}
           style={styles.cancel}>
-          <Text style={styles.cancelText}>{cancelLabel}</Text>
+          <AppText style={styles.cancelText}>{cancelLabel}</AppText>
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -77,7 +78,7 @@ export function ConfirmDialog({
             isDanger && styles.danger,
             confirmDisabled && styles.disabled,
           ]}>
-          <Text style={styles.confirmText}>{confirmLabel}</Text>
+          <AppText style={styles.confirmText}>{confirmLabel}</AppText>
         </Pressable>
       </View>
     </AppBottomSheet>
@@ -90,7 +91,7 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.body,
     lineHeight: theme.typography.lineHeightBody,
     fontFamily: theme.typography.fontFamily,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   actions: { flexDirection: 'row', gap: theme.spacingScale.sm, marginTop: theme.spacingScale.sm },
   cancel: {

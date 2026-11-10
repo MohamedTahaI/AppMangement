@@ -1,5 +1,6 @@
+import { AppText } from '@/components/ui/AppText';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import type { ReactNode } from 'react';
 import {
   BottomSheetBackdrop,
@@ -83,7 +84,7 @@ export function AppBottomSheet({
       <BottomSheetScrollView
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + theme.spacingScale.md }]}>
-        {title ? <Text style={styles.title}>{title}</Text> : null}
+        {title ? <AppText style={styles.title}>{title}</AppText> : null}
         <View style={styles.body}>{children}</View>
       </BottomSheetScrollView>
     </BottomSheetModal>
@@ -91,7 +92,7 @@ export function AppBottomSheet({
 }
 
 const styles = StyleSheet.create({
-  background: { backgroundColor: theme.colors.surface, borderTopLeftRadius: theme.radii.sheet, borderTopRightRadius: theme.radii.sheet },
+  background: { backgroundColor: theme.colors.surface, borderTopStartRadius: theme.radii.sheet, borderTopEndRadius: theme.radii.sheet },
   handle: { width: theme.sizes.avatar, height: theme.sizes.handleHeight, backgroundColor: theme.colors.border },
   content: { padding: theme.spacingScale.lg, paddingBottom: theme.spacingScale.xl },
   title: {
@@ -99,7 +100,7 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontSize: theme.typography.title,
     fontFamily: theme.typography.extraBold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   body: { gap: theme.spacingScale.md, writingDirection: 'rtl' },
 });

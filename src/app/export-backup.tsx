@@ -1,88 +1,51 @@
+import { SectionHeader } from '@/components/ui/SectionHeader';
+import { AppText } from '@/components/ui/AppText';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { getDocumentAsync } from 'expo-document-picker';
 import { File, Paths } from 'expo-file-system';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import * as XLSX from 'xlsx';
-import { MaterialIcons } from '@expo/vector-icons';
-import { I18nManager, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { getDatabase } from '@/db/schema';
 import { setSetting } from '@/db/settings';
 import { BigButton } from '@/components/ui/BigButton';
 import { BackButton } from '@/components/ui/BackButton';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { AppBottomSheet } from '@/components/ui/AppBottomSheet';
 import { MonthPicker, getCurrentMonth } from '@/components/ui/MonthPicker';
 import { ScreenTitle } from '@/components/ui/ScreenTitle';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { theme } from '@/components/ui/theme';
 import { createDatabaseBackup, restoreDatabaseBackup, validateDatabaseBackup, type DatabaseBackup } from '@/services/backup';
-import { buildExportData, type ExportPeriod } from '@/services/exportData';
-import { arabicErrorMessage } from '@/services/errors';
+import { getReportData, type ReportPeriod } from '@/services/reportData';
+import { buildReportPdfHtml } from '@/services/reportPdf';
+import { writeReportWorkbook } from '@/services/reportExcel';
 
-type PeriodKind = ExportPeriod['kind'];
+type PeriodKind = ReportPeriod['kind'];
 
-function escapeHtml(value: string | number | null): string {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-}
-
-function renderTable(rows: Record<string, string | number | null>[]): string {
-  if (rows.length === 0) return '<p class="empty">لا توجد بيانات في هذه الفترة.</p>';
-  const headers = Object.keys(rows[0]);
-  return `<table><thead><tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join('')}</tr></thead><tbody>${rows
-    .map((row) => `<tr>${headers.map((header) => `<td>${escapeHtml(row[header] ?? null)}</td>`).join('')}</tr>`)
-    .join('')}</tbody></table>`;
-}
-
-function formatCurrency(value: string | number): string {
-  if (typeof value !== 'number') return value;
-  return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value)} ج`;
-}
-
-function buildPdfHtml(
-  data: Awaited<ReturnType<typeof buildExportData>>,
-  buildingName: string,
-): string {
-  const summaryRows = data.summary.map(({ label, value }) => ({
-    'البند': label,
-    'القيمة': label === 'الفترة' ? value : formatCurrency(value),
-  }));
-  return `<!doctype html>
-  <html lang="ar" dir="rtl">
-    <head>
-      <meta charset="utf-8">
-      <style>
-        body { direction: rtl; font-family: Cairo, "Noto Naskh Arabic", "Noto Sans Arabic", Tahoma, Arial, sans-serif; color: ${theme.colors.text}; padding: ${theme.spacingScale.sm}px; }
-        h1 { font-size: ${theme.typography.title}px; } h2 { font-size: ${theme.typography.section}px; margin-top: ${theme.spacingScale.md}px; }
-        table { width: 100%; border-collapse: collapse; margin-top: ${theme.spacingScale.xs}px; }
-        th, td { border: ${theme.borderWidths.hairline}px solid ${theme.colors.border}; padding: ${theme.spacingScale.xs}px; text-align: right; font-size: ${theme.typography.small}px; }
-        th { background: ${theme.colors.successBackground}; } tr:nth-child(even) { background: ${theme.colors.background}; }
-        .empty { color: ${theme.colors.secondaryText}; font-size: ${theme.typography.small}px; }
-      </style>
-    </head>
-    <body>
-      <h1>${escapeHtml(buildingName || 'تقرير العمارة')}</h1>
-      <p>الفترة: ${escapeHtml(data.periodLabel)}</p>
-      <h2>الملخص</h2>${renderTable(summaryRows)}
-      <h2>الاشتراك الشهري</h2>${renderTable(data.monthlyMatrix)}
-      <h2>المصروفات</h2>${renderTable(data.expenses)}
-      <h2>التسويات</h2>${renderTable(data.adjustments)}
-      <h2>التحصيلات الخاصة</h2>${renderTable(data.specialCollections)}
-      <h2>المتأخرون</h2>${renderTable(data.unpaid)}
-    </body>
-  </html>`;
-}
-
-function periodFor(kind: PeriodKind, month: string, year: number): ExportPeriod {
+function periodFor(kind: PeriodKind, month: string, year: number): ReportPeriod {
   if (kind === 'all') return { kind: 'all' };
   if (kind === 'year') return { kind: 'year', value: String(year) };
   return { kind: 'month', value: month };
+}
+
+function technicalError(error: unknown): string {
+  if (error instanceof Error) {
+    const cause = error.cause;
+    return [error.message, error.stack, cause instanceof Error ? `السبب: ${cause.message}\n${cause.stack ?? ''}` : '']
+      .filter(Boolean)
+      .join('\n');
+  }
+  return String(error);
+}
+
+function arabicFailure(error: unknown, fallback: string): string {
+  if (error instanceof Error && /[\u0600-\u06FF]/u.test(error.message) && !/[A-Za-z]/u.test(error.message)) {
+    return error.message;
+  }
+  return fallback;
 }
 
 export default function ExportBackupScreen() {
@@ -90,37 +53,72 @@ export default function ExportBackupScreen() {
   const [periodKind, setPeriodKind] = useState<PeriodKind>('month');
   const [month, setMonth] = useState(getCurrentMonth());
   const [year, setYear] = useState(Number(getCurrentMonth().slice(0, 4)));
+  const [customMonth, setCustomMonth] = useState(getCurrentMonth());
+  const [customKind, setCustomKind] = useState<'month' | 'year'>('month');
+  const [customPeriodApplied, setCustomPeriodApplied] = useState(false);
+  const [customPeriodVisible, setCustomPeriodVisible] = useState(false);
+  const currentYear = Number(getCurrentMonth().slice(0, 4));
   const [buildingName, setBuildingName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [pendingBackup, setPendingBackup] = useState<DatabaseBackup | null>(null);
 
   const currentPeriod = () => periodFor(periodKind, month, year);
+  const reportFailure = (context: string, cause: unknown, fallback: string) => {
+    if (__DEV__) console.error(context, cause, technicalError(cause));
+    setError(arabicFailure(cause, fallback));
+    setErrorDetail(technicalError(cause));
+    setDetailsOpen(false);
+  };
+  const chooseQuickPeriod = (kind: PeriodKind) => {
+    setPeriodKind(kind);
+    setCustomPeriodApplied(false);
+    if (kind === 'month') setMonth(getCurrentMonth());
+    if (kind === 'year') setYear(currentYear);
+  };
+  const openCustomPeriod = () => {
+    const startingMonth = periodKind === 'month'
+      ? month
+      : periodKind === 'year'
+        ? `${year}-01`
+        : getCurrentMonth();
+    setCustomMonth(startingMonth);
+    setCustomKind(periodKind === 'year' ? 'year' : 'month');
+    setCustomPeriodVisible(true);
+  };
+  const applyCustomPeriod = () => {
+    setMonth(customMonth);
+    setYear(Number(customMonth.slice(0, 4)));
+    setPeriodKind(customKind);
+    setCustomPeriodApplied(true);
+    setCustomPeriodVisible(false);
+  };
 
   const exportPdf = async () => {
     setBusy(true);
     setError(null);
+    setErrorDetail(null);
     setNotice(null);
     try {
-      const db = await getDatabase();
-      const nameRow = await db.getFirstAsync<{ value: string }>(
-        "SELECT value FROM settings WHERE key = 'building_name'",
-      );
-      const name = nameRow?.value ?? '';
-      setBuildingName(name);
-      const data = await buildExportData(currentPeriod());
+      const data = await getReportData(currentPeriod());
+      setBuildingName(data.buildingName);
       const pdf = await Print.printToFileAsync({
-        html: buildPdfHtml(data, name),
-        textZoom: 110,
+        html: buildReportPdfHtml(data),
+        width: 595,
+        height: 842,
+        textZoom: 100,
       });
       await Sharing.shareAsync(pdf.uri, {
         mimeType: 'application/pdf',
+        UTI: 'com.adobe.pdf',
         dialogTitle: 'مشاركة تقرير العمارة',
       });
       setNotice('تم تجهيز التقرير وفتح قائمة المشاركة.');
     } catch (exportError) {
-      setError(arabicErrorMessage(exportError, 'تعذر إنشاء تقرير الطباعة.'));
+      reportFailure('PDF export failed', exportError, 'تعذر حفظ التقرير PDF.');
     } finally {
       setBusy(false);
     }
@@ -129,36 +127,21 @@ export default function ExportBackupScreen() {
   const exportExcel = async () => {
     setBusy(true);
     setError(null);
+    setErrorDetail(null);
     setNotice(null);
     try {
-      const data = await buildExportData(currentPeriod());
-      const workbook = XLSX.utils.book_new();
-      const sheets: [string, Record<string, string | number | null>[]][] = [
-        ['الملخص', data.summary.map(({ label, value }) => ({ 'البند': label, 'القيمة': value }))],
-        ['الاشتراك الشهري', data.monthlyMatrix],
-        ['المصروفات', data.expenses],
-        ['التسويات', data.adjustments],
-        ['التحصيلات الخاصة', data.specialCollections],
-        ['المتأخرون', data.unpaid],
-      ];
-      for (const [sheetName, rows] of sheets) {
-        const worksheet =
-          rows.length > 0
-            ? XLSX.utils.json_to_sheet(rows)
-            : XLSX.utils.aoa_to_sheet([['لا توجد بيانات في هذه الفترة']]);
-        XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
-      }
-      const bytes = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+      const report = await getReportData(currentPeriod());
+      const bytes = writeReportWorkbook(report);
       const file = new File(Paths.cache, `تقرير-العمارة-${Date.now()}.xlsx`);
       file.create({ intermediates: true, overwrite: true });
-      await file.write(new Uint8Array(bytes));
+      await file.write(bytes);
       await Sharing.shareAsync(file.uri, {
         mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         dialogTitle: 'مشاركة جدول البيانات',
       });
       setNotice('تم تجهيز جدول البيانات وفتح قائمة المشاركة.');
     } catch (exportError) {
-      setError(arabicErrorMessage(exportError, 'تعذر إنشاء جدول البيانات.'));
+      reportFailure('Excel export failed', exportError, 'تعذر إنشاء جدول البيانات.');
     } finally {
       setBusy(false);
     }
@@ -167,6 +150,7 @@ export default function ExportBackupScreen() {
   const createBackup = async () => {
     setBusy(true);
     setError(null);
+    setErrorDetail(null);
     setNotice(null);
     try {
       const backup = await createDatabaseBackup();
@@ -180,7 +164,7 @@ export default function ExportBackupScreen() {
       await setSetting('last_backup_at', new Date().toISOString());
       setNotice('تم تجهيز النسخة الاحتياطية وفتح قائمة المشاركة.');
     } catch (backupError) {
-      setError(arabicErrorMessage(backupError, 'تعذر إنشاء النسخة الاحتياطية.'));
+      reportFailure('Backup creation failed', backupError, 'تعذر إنشاء النسخة الاحتياطية.');
     } finally {
       setBusy(false);
     }
@@ -189,21 +173,33 @@ export default function ExportBackupScreen() {
   const chooseBackup = async () => {
     setBusy(true);
     setError(null);
+    setErrorDetail(null);
     setNotice(null);
     try {
       const result = await getDocumentAsync({
-        type: ['application/json', 'text/json'],
+        type: ['application/json', 'text/plain', '*/*'],
         copyToCacheDirectory: true,
         multiple: false,
       });
       if (result.canceled) return;
       const asset = result.assets[0];
       if (!asset) throw new Error('لم يتم اختيار ملف.');
-      const contents = await new File(asset.uri).text();
-      const validated = validateDatabaseBackup(JSON.parse(contents) as unknown);
+      let contents: string;
+      try {
+        contents = await new File(asset.uri).text();
+      } catch (readError) {
+        throw new Error('تعذر قراءة الملف من الجهاز.', { cause: readError });
+      }
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(contents.replace(/^\uFEFF/, '')) as unknown;
+      } catch (parseError) {
+        throw new Error('الملف ليس نسخة احتياطية من هذا التطبيق.', { cause: parseError });
+      }
+      const validated = validateDatabaseBackup(parsed);
       setPendingBackup(validated);
     } catch (restoreError) {
-      setError(arabicErrorMessage(restoreError, 'الملف غير صالح أو تعذر قراءته.'));
+      reportFailure('Backup selection or validation failed', restoreError, 'تعذر قراءة ملف النسخة الاحتياطية.');
     } finally {
       setBusy(false);
     }
@@ -213,12 +209,13 @@ export default function ExportBackupScreen() {
     if (!pendingBackup) return;
     setBusy(true);
     setError(null);
+    setErrorDetail(null);
     try {
       await restoreDatabaseBackup(pendingBackup);
       setPendingBackup(null);
-      setNotice('تمت استعادة البيانات بنجاح. أغلق التطبيق وافتحه لتحديث كل الشاشات.');
+      router.replace({ pathname: '/(tabs)', params: { restored: String(Date.now()) } });
     } catch (restoreError) {
-      setError(arabicErrorMessage(restoreError, 'تعذرت استعادة النسخة. لم يتم تغيير البيانات.'));
+      reportFailure('Backup restore failed', restoreError, 'تعذرت استعادة النسخة. لم يتم تغيير البيانات.');
     } finally {
       setBusy(false);
     }
@@ -230,52 +227,74 @@ export default function ExportBackupScreen() {
         <BackButton onPress={() => router.back()} label="رجوع" />
         <ScreenTitle title="تصدير / باك أب" subtitle="تصدير التقارير أو حفظ واستعادة البيانات" />
         <Card style={styles.periodCard}>
-          <Text style={styles.sectionTitle}>فترة التقرير</Text>
+          <SectionHeader title="فترة التقرير" />
           <View style={styles.periodOptions}>
             {([
-              ['month', 'شهر'],
-              ['year', 'سنة'],
-              ['all', 'كل البيانات'],
+              ['month', 'هذا الشهر'],
+              ['year', 'هذه السنة'],
+              ['all', 'كل الفترات'],
             ] as [PeriodKind, string][]).map(([kind, label]) => (
               <Pressable
                 key={kind}
                 accessibilityRole="button"
-                onPress={() => setPeriodKind(kind)}
-                style={[styles.periodOption, periodKind === kind && styles.periodSelected]}>
-                <Text style={[styles.periodText, periodKind === kind && styles.periodTextSelected]}>
+                accessibilityState={{ selected: !customPeriodApplied && periodKind === kind }}
+                onPress={() => chooseQuickPeriod(kind)}
+                style={[styles.periodOption, !customPeriodApplied && periodKind === kind && styles.periodSelected]}>
+                <AppText style={[styles.periodText, !customPeriodApplied && periodKind === kind && styles.periodTextSelected]}>
                   {label}
-                </Text>
+                </AppText>
               </Pressable>
             ))}
           </View>
-          {periodKind === 'month' ? (
-            <MonthPicker month={month} onChange={setMonth} />
-          ) : null}
-          {periodKind === 'year' ? (
-            <View style={styles.yearRow}>
-              <Pressable onPress={() => setYear((value) => Math.max(1, value - 1))} style={styles.yearButton}>
-                <MaterialIcons name={I18nManager.isRTL ? 'chevron-right' : 'chevron-left'} size={theme.sizes.iconLarge} color={theme.colors.primary} />
-              </Pressable>
-              <Text style={styles.year}>{year}</Text>
-              <Pressable onPress={() => setYear((value) => Math.min(9999, value + 1))} style={styles.yearButton}>
-                <MaterialIcons name={I18nManager.isRTL ? 'chevron-left' : 'chevron-right'} size={theme.sizes.iconLarge} color={theme.colors.primary} />
-              </Pressable>
-            </View>
-          ) : null}
+          <Pressable accessibilityRole="button" onPress={openCustomPeriod}>
+            <AppText style={styles.customPeriodLink}>اختيار شهر أو سنة أخرى</AppText>
+          </Pressable>
         </Card>
-        <Text style={styles.sectionTitle}>التقارير</Text>
-        <BigButton title={busy ? 'جارٍ التجهيز...' : 'تقرير للطباعة'} disabled={busy} onPress={() => void exportPdf()} />
+        <SectionHeader title="التقارير" />
+        <BigButton title={busy ? 'جارٍ التجهيز...' : 'حفظ التقرير PDF'} disabled={busy} onPress={() => void exportPdf()} />
         <BigButton title={busy ? 'جارٍ التجهيز...' : 'جدول بيانات'} variant="secondary" disabled={busy} onPress={() => void exportExcel()} />
-        <Text style={styles.note}>
+        <AppText style={styles.note}>
           سيفتح الهاتف قائمة المشاركة، ومنها يمكنك حفظ الملف في الهاتف أو إرساله.
-        </Text>
-        <Text style={styles.sectionTitle}>النسخة الاحتياطية</Text>
+        </AppText>
+        <SectionHeader title="النسخة الاحتياطية" />
         <BigButton title={busy ? 'جارٍ التجهيز...' : 'حفظ نسخة احتياطية'} disabled={busy} onPress={() => void createBackup()} />
         <BigButton title={busy ? 'جارٍ الفتح...' : 'استعادة نسخة احتياطية'} variant="secondary" disabled={busy} onPress={() => void chooseBackup()} />
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {notice ? <Text style={styles.success}>{notice}</Text> : null}
-        {buildingName ? <Text style={styles.note}>{buildingName}</Text> : null}
+        {error ? (
+          <View style={styles.errorBox}>
+            <AppText style={styles.error}>{error}</AppText>
+            {errorDetail ? (
+              <>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: detailsOpen }}
+                  onPress={() => setDetailsOpen((open) => !open)}
+                  style={styles.detailsToggle}>
+                  <AppText style={styles.detailsLabel}>{detailsOpen ? 'إخفاء التفاصيل' : 'تفاصيل'}</AppText>
+                </Pressable>
+                {detailsOpen ? <AppText selectable style={styles.errorDetail}>{errorDetail}</AppText> : null}
+              </>
+            ) : null}
+          </View>
+        ) : null}
+        {notice ? <AppText style={styles.success}>{notice}</AppText> : null}
+        {buildingName ? <AppText style={styles.note}>{buildingName}</AppText> : null}
       </ScrollView>
+
+      <AppBottomSheet
+        visible={customPeriodVisible}
+        title="اختيار شهر أو سنة"
+        onClose={() => setCustomPeriodVisible(false)}>
+        <SegmentedControl
+          value={customKind}
+          options={[
+            { value: 'month', label: 'شهر' },
+            { value: 'year', label: 'سنة' },
+          ]}
+          onChange={setCustomKind}
+        />
+        <MonthPicker month={customMonth} onChange={setCustomMonth} />
+        <BigButton title="تطبيق الفترة" onPress={applyCustomPeriod} />
+      </AppBottomSheet>
 
       <ConfirmDialog
         visible={pendingBackup !== null}
@@ -318,7 +337,7 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontSize: theme.typography.heading,
     fontFamily: theme.typography.extraBold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   periodOptions: {
     flexDirection: 'row',
@@ -345,37 +364,30 @@ const styles = StyleSheet.create({
   periodTextSelected: {
     color: theme.colors.surface,
   },
-  yearRow: {
-    minHeight: theme.sizes.touchCompact + theme.spacingScale.xs / 2,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  yearButton: {
-    minWidth: theme.sizes.avatar,
-    minHeight: theme.sizes.touchCompact,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  year: {
-    color: theme.colors.text,
-    fontSize: theme.typography.heading,
-    fontFamily: theme.typography.extraBold,
-  },
+  customPeriodLink: { color: theme.colors.primary, fontSize: theme.typography.small, fontFamily: theme.typography.bold, textAlign: 'auto', textDecorationLine: 'underline' },
   note: {
     color: theme.colors.secondaryText,
     fontSize: theme.typography.body,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   error: {
     color: theme.colors.danger,
     fontSize: theme.typography.body,
-    textAlign: 'right',
+    writingDirection: 'rtl',
   },
+  errorBox: {
+    gap: theme.spacingScale.xs,
+    padding: theme.spacingScale.sm,
+    borderRadius: theme.radii.sm,
+    backgroundColor: theme.colors.dangerBackground,
+  },
+  detailsToggle: { alignSelf: 'flex-start', minHeight: theme.sizes.touchCompact, justifyContent: 'center' },
+  detailsLabel: { color: theme.colors.primary, fontSize: theme.typography.body, fontFamily: theme.typography.bold },
+  errorDetail: { color: theme.colors.text, fontSize: theme.typography.small, writingDirection: 'ltr' },
   success: {
     color: theme.colors.success,
     fontSize: theme.typography.body,
     fontFamily: theme.typography.bold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
 });

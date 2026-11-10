@@ -1,1 +1,1 @@
-export const DRAWER_SIDE = 'left' as const;
+export const DRAWER_SIDE = 'right' as const;

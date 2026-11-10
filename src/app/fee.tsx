@@ -1,6 +1,7 @@
+import { AppText } from '@/components/ui/AppText';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet, Text } from 'react-native';
+import { ScrollView, StyleSheet } from 'react-native';
 
 import { listFeeRates, setFeeRate } from '@/db/fees';
 import { getFeeForMonth } from '@/services/billing';
@@ -90,11 +91,11 @@ export default function FeeScreen() {
     <>
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <BackButton onPress={() => router.back()} label="رجوع" />
-        <ScreenTitle title="الاشتراك الشهري" subtitle="تغيير قيمة الاشتراك من شهر محدد" />
+        <ScreenTitle title="الفاتورة الشهرية" subtitle="تغيير قيمة الفاتورة من شهر محدد" />
         {loading ? <Skeleton height={theme.sizes.regularCardHeight} /> : null}
         {!loading && currentFee !== null ? (
           <Card variant="surface">
-            <Text style={styles.label}>الاشتراك الحالي لهذا الشهر</Text>
+            <AppText style={styles.label}>الاشتراك الحالي لهذا الشهر</AppText>
             <MoneyText amount={currentFee} />
           </Card>
         ) : null}
@@ -103,15 +104,15 @@ export default function FeeScreen() {
           onPress={openEditor}
           disabled={loading || currentFee === null}
         />
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? <AppText style={styles.error}>{error}</AppText> : null}
       </ScrollView>
 
       <AppBottomSheet
         visible={editorVisible}
-        title="تغيير الاشتراك الشهري"
+        title="تغيير الفاتورة الشهرية"
         snapPoints={['66%', '90%']}
         onClose={() => setEditorVisible(false)}>
-        <Text style={styles.label}>يبدأ الاشتراك الجديد من</Text>
+        <AppText style={styles.label}>يبدأ الاشتراك الجديد من</AppText>
         <MonthPicker month={month} onChange={chooseMonth} />
         <FormField
           label="قيمة الاشتراك لكل شقة"
@@ -121,9 +122,9 @@ export default function FeeScreen() {
           placeholder="مثال: 400"
         />
         {existingMonthRate ? (
-          <Text style={styles.warning}>يوجد اشتراك محفوظ لهذا الشهر. سيطلب التطبيق تأكيد تغييره.</Text>
+          <AppText style={styles.warning}>يوجد اشتراك محفوظ لهذا الشهر. سيطلب التطبيق تأكيد تغييره.</AppText>
         ) : null}
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? <AppText style={styles.error}>{error}</AppText> : null}
         <BigButton
           title="حفظ الاشتراك"
           loading={saving}
@@ -169,18 +170,18 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontSize: theme.typography.body,
     fontFamily: theme.typography.bold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   warning: {
     color: theme.colors.warning,
     fontSize: theme.typography.body,
     fontFamily: theme.typography.bold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   error: {
     color: theme.colors.danger,
     fontSize: theme.typography.body,
     fontFamily: theme.typography.bold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
 });

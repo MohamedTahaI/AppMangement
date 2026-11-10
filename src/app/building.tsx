@@ -1,6 +1,7 @@
+import { AppText } from '@/components/ui/AppText';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet, Text } from 'react-native';
+import { ScrollView, StyleSheet } from 'react-native';
 
 import { getSetting, setSetting } from '@/db/settings';
 import { BigButton } from '@/components/ui/BigButton';
@@ -97,16 +98,16 @@ export default function BuildingScreen() {
         ) : (
           <>
             <Card variant="surface">
-              <Text style={styles.label}>اسم العمارة</Text>
-              <Text style={styles.value}>{buildingName || 'لم يُحدد بعد'}</Text>
+              <AppText style={styles.label}>اسم العمارة</AppText>
+              <AppText style={styles.value}>{buildingName || 'لم يُحدد بعد'}</AppText>
             </Card>
             <Card variant="surface">
-              <Text style={styles.label}>بداية تسجيل الاشتراكات</Text>
-              <Text style={styles.value}>{getMonthLabel(startMonth)}</Text>
+              <AppText style={styles.label}>بداية تسجيل الاشتراكات</AppText>
+              <AppText style={styles.value}>{getMonthLabel(startMonth)}</AppText>
             </Card>
           </>
         )}
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? <AppText style={styles.error}>{error}</AppText> : null}
         <BigButton
           title="تعديل بيانات العمارة"
           onPress={() => setEditorVisible(true)}
@@ -125,9 +126,9 @@ export default function BuildingScreen() {
           placeholder="اكتب اسم العمارة"
           editable={!loading && !saving}
         />
-        <Text style={styles.label}>بداية تسجيل الاشتراكات</Text>
+        <AppText style={styles.label}>بداية تسجيل الاشتراكات</AppText>
         <MonthPicker month={startMonth} onChange={setStartMonth} />
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? <AppText style={styles.error}>{error}</AppText> : null}
         <BigButton
           title="حفظ البيانات"
           loading={saving}
@@ -180,18 +181,18 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontSize: theme.typography.body,
     fontFamily: theme.typography.bold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   value: {
     color: theme.colors.text,
     fontSize: theme.typography.body,
     fontFamily: theme.typography.fontFamily,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   error: {
     color: theme.colors.danger,
     fontSize: theme.typography.body,
     fontFamily: theme.typography.bold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
 });

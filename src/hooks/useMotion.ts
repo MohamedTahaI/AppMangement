@@ -58,12 +58,12 @@ function initializeMotionState(): Promise<void> {
           publishMotion();
         })
         .catch((error: unknown) => {
-          console.error('تعذر قراءة إعداد تقليل الحركة.', error);
+          if (__DEV__) console.log('تعذر قراءة إعداد تقليل الحركة.', error);
         });
     });
   })().catch((error: unknown) => {
     initialization = null;
-    console.error('تعذر قراءة إعداد تقليل الحركة.', error);
+    if (__DEV__) console.log('تعذر قراءة إعداد تقليل الحركة.', error);
   });
   return initialization;
 }

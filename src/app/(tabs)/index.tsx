@@ -1,9 +1,11 @@
+import { AppText } from '@/components/ui/AppText';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
+import { ActivityRow, type ActivityType } from '@/components/ui/ActivityRow';
 import { BigButton } from '@/components/ui/BigButton';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -15,6 +17,7 @@ import { PressableCard } from '@/components/ui/PressableCard';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { ProgressRing } from '@/components/ui/ProgressRing';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
+import { SectionHeader } from '@/components/ui/SectionHeader';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
 import { StaggeredEntrance } from '@/components/ui/StaggeredEntrance';
@@ -30,9 +33,10 @@ import { theme } from '@/theme';
 
 interface Activity {
   id: number;
-  type: 'payment' | 'expense' | 'adjustment';
+  type: ActivityType;
   date: string;
   title: string;
+  note: string;
   amount: number;
 }
 
@@ -72,11 +76,14 @@ function daysSince(date: string | null): number {
 
 export default function HomeScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ restored?: string }>();
   const [month, setMonth] = useState(getCurrentMonth());
   const [data, setData] = useState<HomeData>(EMPTY);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dismissedRestoreNotice, setDismissedRestoreNotice] = useState<string | null>(null);
+  const restoreNotice = params.restored && params.restored !== dismissedRestoreNotice;
 
   const load = useCallback(async (showSkeleton = true) => {
     if (showSkeleton) setLoading(true);
@@ -93,19 +100,23 @@ export default function HomeScreen() {
         getDatabase(),
       ]);
       const activities = await db.getAllAsync<Activity>(
-        `SELECT id, type, date, title, amount FROM (
+        `SELECT id, type, date, title, note, amount FROM (
           SELECT p.id, 'payment' AS type, p.paid_date AS date,
-            'دفعة — شقة ' || a.number AS title, p.amount AS amount
+            'شقة ' || a.number || ' — ' || CASE WHEN c.type = 'monthly' THEN c.month ELSE s.title END AS title,
+            p.note AS note, p.amount AS amount
           FROM payments p JOIN charges c ON c.id = p.charge_id
-          JOIN apartments a ON a.id = c.apartment_id WHERE p.deleted = 0
+          JOIN apartments a ON a.id = c.apartment_id
+          LEFT JOIN special_collections s ON s.id = c.special_id
+          WHERE p.deleted = 0
           UNION ALL
           SELECT e.id, 'expense' AS type, e.expense_date AS date,
-            'مصروف — ' || ec.name AS title, -e.amount AS amount
+            ec.name AS title, e.note AS note, -e.amount AS amount
           FROM expenses e JOIN expense_categories ec ON ec.id = e.category_id
           WHERE e.deleted = 0
           UNION ALL
           SELECT id, 'adjustment' AS type, adjustment_date AS date,
-            'تسوية — ' || reason AS title,
+            CASE WHEN type = 'increase' THEN 'زيادة' ELSE 'نقص' END AS title,
+            reason AS note,
             CASE WHEN type = 'decrease' THEN -amount ELSE amount END AS amount
           FROM adjustments WHERE status = 'active'
         ) ORDER BY date DESC, id DESC LIMIT 5`,
@@ -155,11 +166,11 @@ export default function HomeScreen() {
     { label: 'تسجيل دفعة', icon: 'payments', route: '/choose-apartment' },
     { label: 'مصروف', icon: 'add-card', route: { pathname: '/(tabs)/expenses', params: { add: '1' } } },
     { label: 'تحصيل جديد', icon: 'account-balance-wallet', route: { pathname: '/specials', params: { create: '1' } } },
-    { label: 'تسوية', icon: 'tune', route: '/adjustments' },
+    { label: 'تعديل الرصيد', icon: 'tune', route: '/adjustments' },
   ] as const;
   const firstRunSteps = [
     { key: 'apartments', title: 'إضافة الشقق', route: '/apartments', done: data.apartmentCount > 0, icon: 'apartment' },
-    { key: 'fee', title: 'تحديد قيمة الاشتراك الشهري', route: '/fee', done: data.feeExists, icon: 'payments' },
+    { key: 'fee', title: 'تحديد قيمة الفاتورة الشهرية', route: '/fee', done: data.feeExists, icon: 'payments' },
     { key: 'sheet', title: 'ربط الجدول الأونلاين (اختياري)', route: '/sync', done: data.sheetConnected, icon: 'cloud-sync' },
     { key: 'backup', title: 'أخذ أول نسخة احتياطية', route: '/export-backup', done: data.backupDone, icon: 'backup' },
   ] as const;
@@ -177,14 +188,19 @@ export default function HomeScreen() {
         />
       }>
       <ScreenHeader title="الرئيسية" subtitle={getMonthLabel(month)} />
+      {restoreNotice ? (
+        <Pressable onPress={() => setDismissedRestoreNotice(params.restored ?? null)}>
+          <AppText style={styles.restoreNotice}>تمت استعادة البيانات بنجاح.</AppText>
+        </Pressable>
+      ) : null}
       <MonthPicker month={month} onChange={setMonth} />
       <MonthTransition month={month}>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <AppText style={styles.error}>{error}</AppText> : null}
       {loading ? <><Skeleton height={theme.sizes.skeletonHero} /><Skeleton height={theme.sizes.skeletonRow} /><Skeleton height={theme.sizes.skeletonRow} /></> : null}
       {!loading && data.apartmentCount === 0 ? (
         <View style={styles.firstRun}>
-          <Text style={styles.sectionTitle}>ابدأ من هنا</Text>
-          <Text style={styles.description}>أكمل الخطوات الأولى لتجهيز حساب العمارة.</Text>
+          <SectionHeader title="ابدأ من هنا" />
+          <AppText style={styles.description}>أكمل الخطوات الأولى لتجهيز حساب العمارة.</AppText>
           {firstRunSteps.map((step) => (
             <Pressable
               key={step.key}
@@ -192,33 +208,41 @@ export default function HomeScreen() {
               onPress={() => router.push(step.route)}
               style={styles.step}>
               <MaterialIcons name={step.done ? 'check-circle' : step.icon} size={theme.sizes.iconLarge} color={step.done ? theme.colors.success : theme.colors.primary} />
-              <Text style={[styles.stepText, step.done && styles.stepDone]}>{step.title}</Text>
+              <AppText style={[styles.stepText, step.done && styles.stepDone]}>{step.title}</AppText>
               <MaterialIcons name={step.done ? 'check' : 'chevron-left'} size={theme.sizes.icon} color={step.done ? theme.colors.success : theme.colors.muted} />
             </Pressable>
           ))}
         </View>
       ) : null}
       {!loading && data.apartmentCount > 0 ? (
-        <>
+        <View style={styles.homeSections}>
+          <View style={styles.heroStatsGroup}>
           <StaggeredEntrance index={0}>
             <GradientCard>
-              <Text style={styles.heroLabel}>إجمالي التحصيل (كل الوقت)</Text>
-              <AnimatedNumber
-                value={data.totals.totalCollected}
-                suffix=" ج"
-                suffixColor={theme.colors.onPrimary}
-                size={theme.typography.number}
-                style={styles.heroAmount}
-              />
-              <View style={styles.heroBalance}>
-                <Text style={styles.heroBalanceLabel}>الرصيد الكلي</Text>
-                <MoneyText amount={data.totals.balance} size={theme.typography.body} style={styles.heroBalanceAmount} />
+              <View style={styles.heroBalanceRow}>
+                <AppText style={styles.heroBalanceLabel}>الرصيد الكلي</AppText>
+                <AnimatedNumber
+                  value={data.totals.balance}
+                  suffix=" ج"
+                  suffixColor={theme.colors.onPrimary}
+                  size={theme.typography.number}
+                  style={styles.heroAmount}
+                />
+              </View>
+              <View style={styles.heroCollected}>
+                <AppText style={styles.heroCollectedLabel}>إجمالي التحصيل</AppText>
+                <MoneyText
+                  amount={data.totals.totalCollected}
+                  size={theme.typography.body}
+                  currencyColor={theme.colors.heroMuted}
+                  style={styles.heroCollectedAmount}
+                />
               </View>
               {data.totals.totalAdjustments !== 0 ? (
                 <Pressable onPress={() => router.push('/adjustments')} style={styles.heroAdjustment}>
-                  <Text style={styles.heroAdjustmentText}>
-                    منها تسويات: {data.totals.totalAdjustments > 0 ? '+' : ''}{data.totals.totalAdjustments.toLocaleString('en-US')} ج
-                  </Text>
+                  <AppText style={styles.heroAdjustmentText}>
+                    منها تعديل الرصيد: {data.totals.totalAdjustments > 0 ? '+' : ''}{data.totals.totalAdjustments.toLocaleString('en-US')} ج
+                  </AppText>
                 </Pressable>
               ) : null}
             </GradientCard>
@@ -229,12 +253,13 @@ export default function HomeScreen() {
               <StatCard title="مصروفات هذا الشهر" amount={data.totals.monthExpenses} icon="receipt-long" style={styles.statCard} />
             </View>
           </StaggeredEntrance>
+          </View>
           <StaggeredEntrance index={2}>
             <Card variant="surface" style={styles.progressCard}>
               <View style={styles.progressInfo}>
-                <Text style={styles.sectionTitle}>تحصيل {getMonthLabel(month)}</Text>
-                <Text style={styles.description}>{paidCount} من {data.apartmentCount} شقة دفعوا</Text>
-                <Text style={styles.description}>المتبقي للتحصيل</Text>
+                <SectionHeader title={`تحصيل ${getMonthLabel(month)}`} />
+                <AppText style={styles.description}>{paidCount} من {data.apartmentCount} شقة دفعوا</AppText>
+                <AppText style={styles.description}>المتبقي للتحصيل</AppText>
                 <MoneyText amount={data.rows.reduce((sum, row) => sum + row.summary.remaining, 0)} size={theme.typography.body} />
                 <ProgressBar progress={progress} />
               </View>
@@ -243,25 +268,26 @@ export default function HomeScreen() {
           </StaggeredEntrance>
           <StaggeredEntrance index={3}>
             <View style={styles.quickSection}>
-              <Text style={styles.sectionTitle}>إجراءات سريعة</Text>
+              <SectionHeader title="إجراءات سريعة" />
               <View style={styles.quickRow}>
                 {quickActions.map((action) => (
                   <Pressable key={action.label} onPress={() => router.push(action.route)} style={styles.quickAction}>
                     <View style={styles.quickIcon}><MaterialIcons name={action.icon} size={theme.sizes.icon} color={theme.colors.primary} /></View>
-                    <Text style={styles.quickLabel}>{action.label}</Text>
+                    <AppText style={styles.quickLabel}>{action.label}</AppText>
                   </Pressable>
                 ))}
               </View>
             </View>
           </StaggeredEntrance>
           <StaggeredEntrance index={4}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>تحصيلات خاصة جارية</Text>
-            <Pressable onPress={() => router.push('/specials')}><Text style={styles.link}>عرض الكل</Text></Pressable>
-          </View>
+          <View style={styles.homeSection}>
+          <SectionHeader
+            title="تحصيلات خاصة جارية"
+            action={<Pressable onPress={() => router.push('/specials')}><AppText style={styles.link}>عرض الكل</AppText></Pressable>}
+          />
           {data.specials.length === 0 ? (
             <Card style={styles.inlineEmpty}>
-              <Text style={styles.description}>لا توجد تحصيلات خاصة جارية.</Text>
+              <AppText style={styles.description}>لا توجد تحصيلات خاصة جارية.</AppText>
               <BigButton title="تحصيل جديد" onPress={() => router.push({ pathname: '/specials', params: { create: '1' } })} />
             </Card>
           ) : (
@@ -273,20 +299,22 @@ export default function HomeScreen() {
                     key={special.id}
                     onPress={() => router.push({ pathname: '/special-details/[id]', params: { id: String(special.id) } })}
                     cardStyle={styles.specialCard}>
-                    <Text style={styles.specialTitle}>{special.title}</Text>
-                    <Text style={styles.description}>{special.totalCollected.toLocaleString('en-US')} من {special.totalTarget.toLocaleString('en-US')} ج</Text>
+                    <AppText style={styles.specialTitle}>{special.title}</AppText>
+                    <AppText style={styles.description}>{special.totalCollected.toLocaleString('en-US')} من {special.totalTarget.toLocaleString('en-US')} ج</AppText>
                     <ProgressBar progress={specialProgress} />
                   </PressableCard>
                 );
               })}
             </ScrollView>
           )}
+          </View>
           </StaggeredEntrance>
           <StaggeredEntrance index={5}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>لم يدفعوا هذا الشهر ({data.unpaid.length})</Text>
-            <Pressable onPress={() => router.push({ pathname: '/overdue', params: { month } })}><Text style={styles.link}>عرض الكل</Text></Pressable>
-          </View>
+          <View style={styles.homeSection}>
+          <SectionHeader
+            title={`لم يدفعوا هذا الشهر (${data.unpaid.length})`}
+            action={<Pressable onPress={() => router.push({ pathname: '/overdue', params: { month } })}><AppText style={styles.link}>عرض الكل</AppText></Pressable>}
+          />
           {data.unpaid.length === 0 ? <EmptyState message={`كل الشقق سددت اشتراك ${getMonthLabel(month)}.`} /> : null}
           {data.unpaid.slice(0, 3).map((row) => (
             <Pressable
@@ -295,10 +323,10 @@ export default function HomeScreen() {
               <Card style={styles.unpaidRow}>
                 <View style={styles.unpaidInfo}>
                   <View style={styles.apartmentAvatar}>
-                    <Text style={styles.apartmentAvatarText}>{row.apartmentNumber}</Text>
+                    <AppText style={styles.apartmentAvatarText}>{row.apartmentNumber}</AppText>
                   </View>
-                  <Text style={styles.description}>{row.ownerName || 'اسم المالك غير مسجل'}</Text>
-                  <Text style={styles.description}>متبقي {row.remaining.toLocaleString('en-US')} ج</Text>
+                  <AppText style={styles.description}>{row.ownerName || 'اسم المالك غير مسجل'}</AppText>
+                  <AppText style={styles.description}>متبقي {row.remaining.toLocaleString('en-US')} ج</AppText>
                 </View>
                 <MoneyText amount={row.remaining} size={theme.typography.body} />
                 <StatusChip status={row.status} />
@@ -309,34 +337,38 @@ export default function HomeScreen() {
                     router.push({ pathname: '/payment', params: { apartmentId: String(row.apartmentId), month } });
                   }}
                   style={styles.payButton}>
-                  <Text style={styles.payText}>دفع</Text>
+                  <AppText style={styles.payText}>دفع</AppText>
                 </Pressable>
               </Card>
             </Pressable>
           ))}
+          </View>
           </StaggeredEntrance>
           <StaggeredEntrance index={6}>
-          <Text style={styles.sectionTitle}>آخر العمليات</Text>
+          <View style={styles.homeSection}>
+          <SectionHeader title="آخر العمليات" />
           {data.activities.length === 0 ? <EmptyState message="لا توجد عمليات مسجلة بعد." /> : null}
           {data.activities.map((activity) => (
-            <Card key={`${activity.type}-${activity.id}`} style={styles.activityRow}>
-              <View style={styles.unpaidInfo}>
-                <Text style={styles.itemTitle}>{activity.title}</Text>
-                <Text style={styles.description}>{activity.date}</Text>
-              </View>
-              <MoneyText amount={activity.amount} size={theme.typography.body} />
-            </Card>
+            <ActivityRow
+              key={`${activity.type}-${activity.id}`}
+              type={activity.type}
+              title={activity.title}
+              date={activity.date}
+              note={activity.note}
+              amount={activity.amount}
+            />
           ))}
           {data.hasData && data.backupOld ? (
             <Pressable onPress={() => router.push('/export-backup')}>
               <Card style={styles.backup}>
                 <MaterialIcons name="backup" size={theme.sizes.icon} color={theme.colors.warning} />
-                <Text style={styles.backupText}>حان وقت أخذ نسخة احتياطية لبيانات العمارة.</Text>
+                <AppText style={styles.backupText}>حان وقت أخذ نسخة احتياطية لبيانات العمارة.</AppText>
               </Card>
             </Pressable>
           ) : null}
+          </View>
           </StaggeredEntrance>
-        </>
+        </View>
       ) : null}
       </MonthTransition>
     </ScrollView>
@@ -346,21 +378,26 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: theme.colors.background },
   container: { flexGrow: 1, padding: theme.spacingScale.screen, gap: theme.spacingScale.sm, paddingBottom: theme.spacingScale.lg, backgroundColor: theme.colors.background, writingDirection: 'rtl' },
-  error: { color: theme.colors.danger, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'right' },
+  homeSections: { gap: theme.spacingScale.section },
+  heroStatsGroup: { gap: theme.spacingScale.sm },
+  homeSection: { gap: theme.spacingScale.sm },
+  error: { color: theme.colors.danger, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'auto' },
+  restoreNotice: { padding: theme.spacingScale.sm, color: theme.colors.success, backgroundColor: theme.colors.successBackground, borderRadius: theme.radii.sm, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'auto' },
   firstRun: { gap: theme.spacingScale.xs, padding: theme.spacingScale.sm, borderRadius: theme.radii.md, borderWidth: theme.borderWidths.hairline, borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
-  sectionTitle: { color: theme.colors.text, fontSize: theme.typography.section, fontFamily: theme.typography.extraBold, textAlign: 'right' },
-  description: { color: theme.colors.secondaryText, fontSize: theme.typography.small, fontFamily: theme.typography.fontFamily, textAlign: 'right' },
+  sectionTitle: { color: theme.colors.text, fontSize: theme.typography.section, fontFamily: theme.typography.extraBold, textAlign: 'auto' },
+  description: { color: theme.colors.secondaryText, fontSize: theme.typography.small, fontFamily: theme.typography.fontFamily, textAlign: 'auto' },
   step: { minHeight: theme.sizes.touch, paddingHorizontal: theme.spacingScale.xs, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: theme.spacingScale.xs, borderRadius: theme.radii.sm, backgroundColor: theme.colors.background },
-  stepText: { flex: 1, color: theme.colors.text, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'right' },
+  stepText: { flex: 1, color: theme.colors.text, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'auto' },
   stepDone: { color: theme.colors.success },
-  heroLabel: { color: theme.colors.onPrimary, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'right' },
+  heroBalanceRow: { width: '100%', flexDirection: 'row', direction: 'rtl', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacingScale.xs },
+  heroBalanceLabel: { flexShrink: 0, color: theme.colors.onPrimary, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'auto', writingDirection: 'rtl' },
   heroAmount: { color: theme.colors.onPrimary, fontFamily: theme.typography.extraBold },
-  heroBalance: { width: '100%', paddingTop: theme.spacingScale.xs, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: theme.borderWidths.hairline, borderTopColor: theme.colors.dividerOnHero },
-  heroBalanceLabel: { color: theme.colors.onPrimary, fontSize: theme.typography.small, fontFamily: theme.typography.medium },
-  heroBalanceAmount: { color: theme.colors.onPrimary, fontFamily: theme.typography.bold },
+  heroCollected: { width: '100%', paddingTop: theme.spacingScale.xs, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: theme.borderWidths.hairline, borderTopColor: theme.colors.dividerOnHero },
+  heroCollectedLabel: { color: theme.colors.heroMuted, fontSize: theme.typography.small, fontFamily: theme.typography.medium },
+  heroCollectedAmount: { color: theme.colors.heroMuted, fontFamily: theme.typography.bold },
   heroAdjustment: { alignSelf: 'flex-end', minHeight: theme.sizes.touch - theme.spacingScale.xs, justifyContent: 'center' },
-  heroAdjustmentText: { color: theme.colors.onPrimary, fontSize: theme.typography.small, fontFamily: theme.typography.bold, textAlign: 'right' },
-  statsRow: { flexDirection: 'row', gap: theme.spacingScale.xs },
+  heroAdjustmentText: { color: theme.colors.onPrimary, fontSize: theme.typography.small, fontFamily: theme.typography.bold, textAlign: 'auto' },
+  statsRow: { flexDirection: 'row', gap: theme.spacingScale.cardGap },
   statCard: { flex: 1 },
   progressCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacingScale.xs },
   progressInfo: { flex: 1, alignItems: 'flex-end', gap: theme.spacingScale.xs },
@@ -369,20 +406,18 @@ const styles = StyleSheet.create({
   quickAction: { flex: 1, minHeight: theme.sizes.quickActionHeight, alignItems: 'center', justifyContent: 'center', gap: theme.spacingScale.xs, paddingHorizontal: theme.spacingScale.xs, borderRadius: theme.radii.md, backgroundColor: theme.colors.surface, borderWidth: theme.borderWidths.hairline, borderColor: theme.colors.border },
   quickIcon: { width: theme.sizes.avatar, height: theme.sizes.avatar, alignItems: 'center', justifyContent: 'center', borderRadius: theme.radii.pill, backgroundColor: theme.colors.successBackground },
   quickLabel: { color: theme.colors.text, fontSize: theme.typography.small, fontFamily: theme.typography.bold, textAlign: 'center' },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacingScale.xs },
   link: { color: theme.colors.primary, fontSize: theme.typography.small, fontFamily: theme.typography.bold },
   inlineEmpty: { gap: theme.spacingScale.xs },
   specialScroll: { gap: theme.spacingScale.xs, paddingVertical: theme.spacingScale.xs },
   specialCard: { width: theme.sizes.specialCardWidth, minHeight: theme.sizes.collectionCard, justifyContent: 'center', gap: theme.spacingScale.xs },
-  specialTitle: { color: theme.colors.text, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'right' },
+  specialTitle: { color: theme.colors.text, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'auto' },
   unpaidRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacingScale.xs, borderRadius: theme.radii.md },
   unpaidInfo: { flex: 1, alignItems: 'flex-end', gap: theme.spacingScale.xs },
   apartmentAvatar: { minWidth: theme.sizes.avatar, height: theme.sizes.avatar, paddingHorizontal: theme.spacingScale.xs, alignItems: 'center', justifyContent: 'center', borderRadius: theme.radii.pill, backgroundColor: theme.colors.unpaidBackground },
   apartmentAvatarText: { color: theme.colors.danger, fontSize: theme.typography.small, fontFamily: theme.typography.bold },
-  itemTitle: { color: theme.colors.text, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'right' },
+  itemTitle: { color: theme.colors.text, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'auto' },
   payButton: { minHeight: theme.sizes.touch, minWidth: theme.sizes.minActionWidth, alignItems: 'center', justifyContent: 'center', borderRadius: theme.radii.sm, backgroundColor: theme.colors.primary },
   payText: { color: theme.colors.onPrimary, fontSize: theme.typography.small, fontFamily: theme.typography.bold },
-  activityRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacingScale.xs },
   backup: { minHeight: theme.sizes.touch, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: theme.spacingScale.xs, backgroundColor: theme.colors.warningBackground },
-  backupText: { flex: 1, color: theme.colors.warning, fontSize: theme.typography.small, fontFamily: theme.typography.bold, textAlign: 'right' },
+  backupText: { flex: 1, color: theme.colors.warning, fontSize: theme.typography.small, fontFamily: theme.typography.bold, textAlign: 'auto' },
 });

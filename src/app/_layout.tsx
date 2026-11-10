@@ -1,6 +1,7 @@
-import { Stack } from 'expo-router';
+import { AppText } from '@/components/ui/AppText';
+import { Stack, type ErrorBoundaryProps } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { I18nManager, Platform, StyleSheet, Text } from 'react-native';
+import { I18nManager, Platform, Pressable, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
@@ -27,17 +28,19 @@ import { useMotion } from '@/hooks/useMotion';
 import { theme } from '@/theme';
 import { DrawerProvider } from '@/components/navigation/DrawerProvider';
 
+let hasLoggedRuntimeRTL = false;
+
 void SplashScreen.preventAutoHideAsync();
 if (Platform.OS === 'android') {
   void SystemUI.setBackgroundColorAsync(theme.colors.background).catch((error: unknown) => {
-    console.error('تعذر ضبط لون خلفية نافذة التطبيق.', error);
+    if (__DEV__) console.log('تعذر ضبط لون خلفية نافذة التطبيق.', error);
   });
 }
 
 if (Platform.OS !== 'web') {
   I18nManager.allowRTL(true);
   I18nManager.swapLeftAndRightInRTL(true);
-  if (!I18nManager.isRTL) I18nManager.forceRTL(true);
+  I18nManager.forceRTL(true);
 }
 
 export default function RootLayout() {
@@ -55,6 +58,17 @@ export default function RootLayout() {
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
   const initialized = useRef(false);
+
+  useEffect(() => {
+    if (__DEV__ && !hasLoggedRuntimeRTL) {
+      hasLoggedRuntimeRTL = true;
+      if (I18nManager.isRTL) {
+        console.log('I18nManager.isRTL:', true);
+      } else {
+        console.warn('I18nManager.isRTL: false — أغلق Expo Go بالكامل وافتحه مجدداً لتطبيق اتجاه RTL.');
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if ((!fontsLoaded && !fontError) || initialized.current) return;
@@ -90,16 +104,16 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, justifyContent: 'center', padding: theme.spacingScale.md, backgroundColor: theme.colors.background }}>
           <StatusBar style="dark" />
-          <Text
+          <AppText
             style={{
               color: theme.colors.danger,
               fontSize: theme.typography.section,
-              textAlign: 'right',
+              textAlign: 'auto',
               writingDirection: 'rtl',
               fontFamily: theme.typography.fontFamily,
             }}>
             تعذر تشغيل قاعدة البيانات: {startupError}
-          </Text>
+          </AppText>
         </SafeAreaView>
       </SafeAreaProvider>
     );
@@ -109,7 +123,7 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, justifyContent: 'center', padding: theme.spacingScale.md, backgroundColor: theme.colors.background }}>
           <StatusBar style="dark" />
-          <Text style={{ color: theme.colors.text, fontSize: theme.typography.section, textAlign: 'center', fontFamily: theme.typography.fontFamily }}>جارٍ تجهيز التطبيق...</Text>
+          <AppText style={{ color: theme.colors.text, fontSize: theme.typography.section, textAlign: 'center', fontFamily: theme.typography.fontFamily }}>جارٍ تجهيز التطبيق...</AppText>
         </SafeAreaView>
       </SafeAreaProvider>
     );
@@ -119,8 +133,8 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <SafeAreaView edges={['top', 'bottom']} style={styles.pinScreen}>
           <StatusBar style="dark" />
-          <Text style={styles.pinTitle}>مدير العمارة</Text>
-          <Text style={styles.pinMessage}>اكتب رمز الدخول لفتح التطبيق</Text>
+          <AppText style={styles.pinTitle}>مدير العمارة</AppText>
+          <AppText style={styles.pinMessage}>اكتب رمز الدخول لفتح التطبيق</AppText>
           <FormField
             label="رمز الدخول"
             value={pin}
@@ -133,7 +147,7 @@ export default function RootLayout() {
             maxLength={4}
             autoFocus
           />
-          {pinError ? <Text style={styles.pinError}>{pinError}</Text> : null}
+          {pinError ? <AppText style={styles.pinError}>{pinError}</AppText> : null}
           <BigButton
             title="فتح التطبيق"
             onPress={() => {
@@ -148,7 +162,7 @@ export default function RootLayout() {
                   }
                 })
                 .catch((error: unknown) => {
-                  setPinError(error instanceof Error ? error.message : 'تعذر التحقق من رمز الدخول.');
+                  setPinError(arabicErrorMessage(error, 'تعذر التحقق من رمز الدخول.'));
                 });
             }}
           />
@@ -198,6 +212,29 @@ export default function RootLayout() {
   );
 }
 
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  if (__DEV__) console.error('Unhandled route rendering error:', error, error.stack);
+  return (
+    <SafeAreaProvider>
+      <SafeAreaView edges={['top', 'bottom']} style={styles.pinScreen}>
+        <StatusBar style="dark" />
+        <AppText style={styles.pinTitle}>حدث خطأ أثناء فتح الصفحة</AppText>
+        <AppText style={styles.pinMessage}>أعد المحاولة. إذا استمر الخطأ، أرسل سجل التطوير للمبرمج.</AppText>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            void retry().catch((retryError: unknown) => {
+              if (__DEV__) console.error('Route retry failed:', retryError);
+            });
+          }}
+          style={{ minHeight: theme.sizes.button, alignItems: 'center', justifyContent: 'center' }}>
+          <AppText style={styles.pinError}>إعادة المحاولة</AppText>
+        </Pressable>
+      </SafeAreaView>
+    </SafeAreaProvider>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.background },
   pinScreen: {
@@ -225,6 +262,6 @@ const styles = StyleSheet.create({
     color: theme.colors.danger,
     fontSize: theme.typography.body,
     fontFamily: theme.typography.bold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
 });

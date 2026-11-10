@@ -1,12 +1,9 @@
+import { AppText } from '@/components/ui/AppText';
+import { SectionHeader } from '@/components/ui/SectionHeader';
+import { formatDate } from '@/services/dateFormat';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import {
   addExpense,
@@ -261,6 +258,7 @@ export default function ExpensesScreen() {
             setMonth(nextMonth);
             setNotice(null);
           }}
+          defaultSort="date"
           sort={sort}
           sortOptions={[
             { value: 'date', label: 'التاريخ' },
@@ -268,7 +266,7 @@ export default function ExpensesScreen() {
           ]}
           onSortChange={setSort}
           extraFilterCount={Number(categoryFilter !== 'all')}
-          extraFilters={
+          mainFilters={
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterOptions}>
               {[
                 { value: 'all', label: 'الكل' },
@@ -282,9 +280,9 @@ export default function ExpensesScreen() {
                   accessibilityState={{ selected: categoryFilter === option.value }}
                   onPress={() => setCategoryFilter(option.value)}
                   style={[styles.filterOption, categoryFilter === option.value && styles.filterOptionSelected]}>
-                  <Text style={[styles.filterOptionText, categoryFilter === option.value && styles.filterOptionTextSelected]}>
+                  <AppText style={[styles.filterOptionText, categoryFilter === option.value && styles.filterOptionTextSelected]}>
                     {option.label}
-                  </Text>
+                  </AppText>
                 </Pressable>
               ))}
             </ScrollView>
@@ -293,18 +291,18 @@ export default function ExpensesScreen() {
           totalCount={categories.filter((category) => category.active === 1).length + expenses.length}
           totalAmount={otherExpenses.reduce((sum, expense) => sum + expense.amount, 0)
             + fixedCategories.reduce((sum, category) => sum + (Number(fixedAmounts[category.id]) || 0), 0)}
-          onClear={() => { setSearch(''); setCategoryFilter('all'); setSort('date'); }}
+          onClear={() => { setSearch(''); setCategoryFilter('all'); setSort('date'); setMonth(getCurrentMonth()); }}
         />
         <MonthTransition month={month}>
         <Card variant="surface" style={styles.totalCard}>
-          <Text style={styles.totalLabel}>إجمالي مصروفات {getMonthLabel(month)}</Text>
+          <AppText style={styles.totalLabel}>إجمالي مصروفات {getMonthLabel(month)}</AppText>
           <MoneyText amount={monthTotal} />
         </Card>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {notice ? <Text style={styles.success}>{notice}</Text> : null}
-        {loading ? <Text style={styles.message}>جارٍ تحميل المصروفات...</Text> : null}
+        {error ? <AppText style={styles.error}>{error}</AppText> : null}
+        {notice ? <AppText style={styles.success}>{notice}</AppText> : null}
+        {loading ? <AppText style={styles.message}>جارٍ تحميل المصروفات...</AppText> : null}
 
-        <Text style={styles.sectionTitle}>المصروفات الثابتة</Text>
+        <SectionHeader title="المصروفات الثابتة" />
         {!loading && fixedCategories.length === 0 ? (
           <EmptyState message="لا توجد أنواع مصروفات ثابتة. أضف نوعاً من المزيد." />
         ) : null}
@@ -312,7 +310,7 @@ export default function ExpensesScreen() {
           const exists = expenses.some((expense) => expense.category_id === category.id);
           return (
             <Card key={category.id}>
-              <Text style={styles.categoryTitle}>{category.name}</Text>
+              <AppText style={styles.categoryTitle}>{category.name}</AppText>
               <FormField
                 label="المبلغ"
                 value={fixedAmounts[category.id] ?? ''}
@@ -323,7 +321,7 @@ export default function ExpensesScreen() {
                 placeholder="اتركه فارغاً إذا لم يحدث"
               />
               {!exists && !fixedAmounts[category.id] ? (
-                <Text style={styles.helper}>لم يحدث هذا الشهر</Text>
+                <AppText style={styles.helper}>لم يحدث هذا الشهر</AppText>
               ) : null}
               <BigButton
                 title={savingFixedId === category.id ? 'جارٍ الحفظ...' : 'حفظ'}
@@ -334,15 +332,21 @@ export default function ExpensesScreen() {
           );
         })}
 
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>مصروفات أخرى</Text>
+        <SectionHeader
+          title="مصروفات أخرى"
+          style={styles.otherHeader}
+          action={
           <BigButton
             title="إضافة مصروف"
             onPress={openNewExpense}
+            size="compact"
+            icon="add"
+            numberOfLines={1}
             style={styles.addButton}
             disabled={!categories.some((item) => item.is_fixed === 0 && item.active === 1)}
           />
-        </View>
+          }
+        />
         {!loading && otherExpenses.length === 0 ? (
           <EmptyState message="لا توجد مصروفات أخرى لهذا الشهر." />
         ) : null}
@@ -352,23 +356,23 @@ export default function ExpensesScreen() {
             <Card key={expense.id}>
               <View style={styles.expenseRow}>
                 <View style={styles.expenseInfo}>
-                  <Text style={styles.categoryTitle}>{category?.name ?? 'مصروف'}</Text>
-                  <Text style={styles.helper}>{expense.expense_date}</Text>
-                  {expense.note ? <Text style={styles.helper}>{expense.note}</Text> : null}
+                  <AppText style={styles.categoryTitle}>{category?.name ?? 'مصروف'}</AppText>
+                  <AppText style={styles.helper}>{formatDate(expense.expense_date)}</AppText>
+                  {expense.note ? <AppText style={styles.helper}>{expense.note}</AppText> : null}
                   {expense.special_id !== null ? (
-                    <Text style={styles.helper}>
+                    <AppText style={styles.helper}>
                       {specials.find((item) => item.id === expense.special_id)?.title ?? 'تحصيل خاص'}
-                    </Text>
+                    </AppText>
                   ) : null}
                 </View>
                 <MoneyText amount={expense.amount} size={theme.typography.section} />
               </View>
               <View style={styles.actions}>
                 <Pressable onPress={() => openEditExpense(expense)} style={styles.actionButton}>
-                  <Text style={styles.actionText}>تعديل</Text>
+                  <AppText style={styles.actionText}>تعديل</AppText>
                 </Pressable>
                 <Pressable onPress={() => setPendingDelete(expense)} style={styles.actionButton}>
-                  <Text style={styles.deleteText}>حذف</Text>
+                  <AppText style={styles.deleteText}>حذف</AppText>
                 </Pressable>
               </View>
             </Card>
@@ -382,7 +386,7 @@ export default function ExpensesScreen() {
         title={editing ? 'تعديل المصروف' : 'إضافة مصروف'}
         snapPoints={['75%', '90%']}
         onClose={() => setEditorVisible(false)}>
-            <Text style={styles.fieldLabel}>نوع المصروف</Text>
+            <AppText style={styles.fieldLabel}>نوع المصروف</AppText>
             {categories.filter(
               (item) =>
                 (item.is_fixed === 0 && item.active === 1)
@@ -402,14 +406,14 @@ export default function ExpensesScreen() {
                   key={category.id}
                   onPress={() => setCategoryId(category.id)}
                   style={[styles.option, categoryId === category.id && styles.selectedOption]}>
-                  <Text style={styles.optionText}>{category.name}</Text>
+                  <AppText style={styles.optionText}>{category.name}</AppText>
                 </Pressable>
               ))}
             </View>
             <FormField label="المبلغ" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" />
             <FormField label="التاريخ" value={expenseDate} onChangeText={setExpenseDate} placeholder="مثال: 2026-01-31" />
             <FormField label="ملاحظة (اختياري)" value={note} onChangeText={setNote} />
-            <Text style={styles.fieldLabel}>من أي تحصيل خاص؟ (اختياري)</Text>
+            <AppText style={styles.fieldLabel}>من أي تحصيل خاص؟ (اختياري)</AppText>
             <View style={styles.optionList}>
               {specials.length === 0 ? (
                 <EmptyState message="لا توجد تحصيلات خاصة محفوظة." />
@@ -417,18 +421,18 @@ export default function ExpensesScreen() {
               <Pressable
                 onPress={() => setSpecialId(null)}
                 style={[styles.option, specialId === null && styles.selectedOption]}>
-                <Text style={styles.optionText}>بدون تحصيل خاص</Text>
+                <AppText style={styles.optionText}>بدون تحصيل خاص</AppText>
               </Pressable>
               {specials.map((special) => (
                 <Pressable
                   key={special.id}
                   onPress={() => setSpecialId(special.id)}
                   style={[styles.option, specialId === special.id && styles.selectedOption]}>
-                  <Text style={styles.optionText}>{special.title}</Text>
+                  <AppText style={styles.optionText}>{special.title}</AppText>
                 </Pressable>
               ))}
             </View>
-            {error ? <Text style={styles.error}>{error}</Text> : null}
+            {error ? <AppText style={styles.error}>{error}</AppText> : null}
             <BigButton
               title="حفظ المصروف"
               onPress={() => void saveOther()}
@@ -488,9 +492,10 @@ const styles = StyleSheet.create({
     gap: theme.spacingScale.sm,
     backgroundColor: theme.colors.background,
     writingDirection: 'rtl',
+    direction: 'rtl',
   },
   totalCard: {
-    alignItems: 'flex-end',
+    alignItems: 'stretch',
   },
   filterOptions: { gap: theme.spacingScale.xs, paddingVertical: theme.spacingScale.xs },
   filterOption: {
@@ -507,33 +512,39 @@ const styles = StyleSheet.create({
   filterOptionText: { color: theme.colors.text, fontSize: theme.typography.small, fontFamily: theme.typography.bold },
   filterOptionTextSelected: { color: theme.colors.onPrimary },
   totalLabel: {
+    width: '100%',
     color: theme.colors.secondaryText,
     fontSize: theme.typography.body,
-    textAlign: 'right',
+    textAlign: 'auto',
+    writingDirection: 'rtl',
   },
   sectionTitle: {
+    width: '100%',
     color: theme.colors.text,
     fontSize: theme.typography.heading,
     fontFamily: theme.typography.extraBold,
-    textAlign: 'right',
-  },
-  sectionHeader: {
-    gap: theme.spacingScale.xs,
-    alignItems: 'stretch',
+    textAlign: 'auto',
+    writingDirection: 'rtl',
   },
   addButton: {
-    minHeight: theme.sizes.touchCompact + theme.spacingScale.xs / 2,
+    width: '100%',
+    minWidth: 0,
   },
+  otherHeader: { marginBottom: 12 },
   categoryTitle: {
+    width: '100%',
     color: theme.colors.text,
     fontSize: theme.typography.section,
     fontFamily: theme.typography.extraBold,
-    textAlign: 'right',
+    textAlign: 'auto',
+    writingDirection: 'rtl',
   },
   helper: {
+    width: '100%',
     color: theme.colors.secondaryText,
     fontSize: theme.typography.body,
-    textAlign: 'right',
+    textAlign: 'auto',
+    writingDirection: 'rtl',
   },
   message: {
     color: theme.colors.secondaryText,
@@ -541,15 +552,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   error: {
+    width: '100%',
     color: theme.colors.danger,
     fontSize: theme.typography.body,
-    textAlign: 'right',
+    textAlign: 'auto',
+    writingDirection: 'rtl',
   },
   success: {
+    width: '100%',
     color: theme.colors.success,
     fontSize: theme.typography.body,
     fontFamily: theme.typography.bold,
-    textAlign: 'right',
+    textAlign: 'auto',
+    writingDirection: 'rtl',
   },
   expenseRow: {
     flexDirection: 'row',
@@ -583,10 +598,12 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.bold,
   },
   fieldLabel: {
+    width: '100%',
     color: theme.colors.text,
     fontSize: theme.typography.body,
     fontFamily: theme.typography.bold,
-    textAlign: 'right',
+    textAlign: 'auto',
+    writingDirection: 'rtl',
   },
   optionList: {
     gap: theme.spacingScale.xs,
@@ -606,8 +623,10 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.successBackground,
   },
   optionText: {
+    width: '100%',
     color: theme.colors.text,
     fontSize: theme.typography.body,
-    textAlign: 'right',
+    textAlign: 'auto',
+    writingDirection: 'rtl',
   },
 });

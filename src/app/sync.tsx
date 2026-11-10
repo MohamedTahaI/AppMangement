@@ -1,6 +1,7 @@
+import { AppText } from '@/components/ui/AppText';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { getSetting } from '@/db/settings';
 import { getDatabase, markDirty } from '@/db/schema';
@@ -11,6 +12,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FormField } from '@/components/ui/FormField';
 import { ScreenTitle } from '@/components/ui/ScreenTitle';
 import { theme } from '@/components/ui/theme';
+import { arabicErrorMessage } from '@/services/errors';
 import {
   getSyncStatus,
   pingSheet,
@@ -65,14 +67,14 @@ export default function OnlineSheetScreen() {
 
   useFocusEffect(useCallback(() => {
     void load().catch((loadError: unknown) => {
-      setError(loadError instanceof Error ? loadError.message : 'تعذر تحميل بيانات الاتصال.');
+      setError(arabicErrorMessage(loadError, 'تعذر تحميل بيانات الاتصال.'));
     });
   }, [load]));
 
   useFocusEffect(useCallback(() => {
     return subscribeToSyncStatus(() => {
       void getSyncStatus().then(setStatus).catch((loadError: unknown) => {
-        setError(loadError instanceof Error ? loadError.message : 'تعذر تحميل حالة التحديث.');
+        setError(arabicErrorMessage(loadError, 'تعذر تحميل حالة التحديث.'));
       });
     });
   }, []));
@@ -121,7 +123,7 @@ export default function OnlineSheetScreen() {
       await pingSheet();
       setNotice('نجح الاتصال بالجدول.');
     } catch (testError) {
-      setError(testError instanceof Error ? testError.message : 'تعذر اختبار الاتصال.');
+      setError(arabicErrorMessage(testError, 'تعذر اختبار الاتصال.'));
     } finally {
       setBusy(false);
       void getSyncStatus().then(setStatus);
@@ -137,7 +139,7 @@ export default function OnlineSheetScreen() {
       await syncNow();
       setNotice('تم تحديث الجدول بالكامل بنجاح.');
     } catch (syncError) {
-      setError(syncError instanceof Error ? syncError.message : 'تعذر تحديث الجدول.');
+      setError(arabicErrorMessage(syncError, 'تعذر تحديث الجدول.'));
     } finally {
       setBusy(false);
       void getSyncStatus().then(setStatus);
@@ -167,10 +169,10 @@ export default function OnlineSheetScreen() {
         <Card variant="surface" style={styles.statusCard}>
           <View style={styles.statusRow}>
             <View style={[styles.dot, { backgroundColor: dotColor }]} />
-            <Text style={styles.statusText}>{statusLabel(status)}</Text>
+            <AppText style={styles.statusText}>{statusLabel(status)}</AppText>
           </View>
-          <Text style={styles.lastSync}>آخر تحديث: {formatSyncDate(status.lastSyncedAt)}</Text>
-          {status.error ? <Text style={styles.error}>{status.error}</Text> : null}
+          <AppText style={styles.lastSync}>آخر تحديث: {formatSyncDate(status.lastSyncedAt)}</AppText>
+          {status.error ? <AppText style={styles.error}>{status.error}</AppText> : null}
         </Card>
 
         <FormField
@@ -192,9 +194,9 @@ export default function OnlineSheetScreen() {
           secureTextEntry
           editable={!busy}
         />
-        <Text style={styles.help}>
+        <AppText style={styles.help}>
           احفظ الرابط والرمز من محرر السكريبت. لا تشارك الرمز مع السكان.
-        </Text>
+        </AppText>
 
         <BigButton
           title={busy ? 'جارٍ الاتصال...' : 'حفظ بيانات الاتصال'}
@@ -205,7 +207,7 @@ export default function OnlineSheetScreen() {
             void saveConfiguration()
               .then(() => setNotice('تم حفظ بيانات الاتصال.'))
               .catch((saveError: unknown) => {
-                setError(saveError instanceof Error ? saveError.message : 'تعذر حفظ بيانات الاتصال.');
+                setError(arabicErrorMessage(saveError, 'تعذر حفظ بيانات الاتصال.'));
               })
               .finally(() => setBusy(false));
           }}
@@ -229,11 +231,11 @@ export default function OnlineSheetScreen() {
           disabled={busy}
         />
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {notice ? <Text style={styles.notice}>{notice}</Text> : null}
-        <Text style={styles.help}>
+        {error ? <AppText style={styles.error}>{error}</AppText> : null}
+        {notice ? <AppText style={styles.notice}>{notice}</AppText> : null}
+        <AppText style={styles.help}>
           يُرسل التطبيق نسخة كاملة من البيانات ويعيد كتابة أوراق الجدول. السكان يستطيعون المشاهدة فقط.
-        </Text>
+        </AppText>
       </ScrollView>
 
       <ConfirmDialog
@@ -291,23 +293,23 @@ const styles = StyleSheet.create({
   lastSync: {
     color: theme.colors.secondaryText,
     fontSize: theme.typography.body,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   help: {
     color: theme.colors.secondaryText,
     fontSize: theme.typography.body,
     lineHeight: theme.typography.lineHeightBody,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   error: {
     color: theme.colors.danger,
     fontSize: theme.typography.body,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   notice: {
     color: theme.colors.success,
     fontSize: theme.typography.body,
     fontFamily: theme.typography.bold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
 });

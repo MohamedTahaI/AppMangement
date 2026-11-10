@@ -1,5 +1,6 @@
+import { AppText } from '@/components/ui/AppText';
 import { MaterialIcons } from '@expo/vector-icons';
-import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { StyleSheet, View, type ViewStyle } from 'react-native';
 
 import { Card } from './Card';
 import { MoneyText } from './MoneyText';
@@ -19,7 +20,7 @@ export function StatCard({ title, amount, icon, style }: StatCardProps) {
         <View style={styles.iconCircle}>
           <MaterialIcons name={icon} size={theme.sizes.icon} color={theme.colors.primary} />
         </View>
-        <Text style={styles.title}>{title}</Text>
+        <AppText style={styles.title}>{title}</AppText>
       </View>
       <MoneyText amount={amount} size={theme.typography.section} />
     </Card>
@@ -30,5 +31,5 @@ const styles = StyleSheet.create({
   card: { minHeight: theme.sizes.regularCardHeight, justifyContent: 'space-between', alignItems: 'flex-end' },
   heading: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacingScale.xs },
   iconCircle: { width: theme.sizes.iconBadge, height: theme.sizes.iconBadge, borderRadius: theme.radii.pill, backgroundColor: theme.colors.successBackground, alignItems: 'center', justifyContent: 'center' },
-  title: { flex: 1, color: theme.colors.secondaryText, fontSize: theme.typography.small, fontFamily: theme.typography.medium, textAlign: 'right' },
+  title: { flex: 1, color: theme.colors.secondaryText, fontSize: theme.typography.small, fontFamily: theme.typography.medium, textAlign: 'auto' },
 });

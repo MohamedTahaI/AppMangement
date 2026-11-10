@@ -1,7 +1,8 @@
+import { AppText } from '@/components/ui/AppText';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 
 import type { MonthlyApartmentRow } from '@/services/billing';
 import { getMonthlyApartmentRows } from '@/services/billing';
@@ -62,7 +63,7 @@ export default function CollectionScreen() {
         onPress={() => router.push('/specials')}
         style={styles.specialLink}>
         <View style={styles.specialLinkContent}>
-          <Text style={styles.specialLinkText}>تحصيلات خاصة</Text>
+          <AppText style={styles.specialLinkText}>تحصيلات خاصة</AppText>
           <MaterialIcons name="chevron-left" size={theme.sizes.icon} color={theme.colors.primary} />
         </View>
       </Pressable>
@@ -78,25 +79,26 @@ export default function CollectionScreen() {
           { value: 'apartment', label: 'رقم الشقة' },
           { value: 'remaining', label: 'أكبر متبقي' },
         ]}
+        defaultSort="apartment"
         onSortChange={setSort}
         resultCount={visibleRows.length}
         totalCount={rows.length}
         totalAmount={visibleRows.reduce((sum, row) => sum + row.summary.remaining, 0)}
-        onClear={() => { setSearch(''); setStatusFilter('all'); setUnpaidOnly(false); setSort('apartment'); }}
+        onClear={() => { setSearch(''); setStatusFilter('all'); setUnpaidOnly(false); setSort('apartment'); setMonth(getCurrentMonth()); }}
       />
       <MonthTransition month={month}>
       <View style={styles.summaryRow}>
         <Card variant="surface" style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>تم تحصيله</Text>
+          <AppText style={styles.summaryLabel}>تم تحصيله</AppText>
           <MoneyText amount={collected} size={theme.typography.section} />
         </Card>
         <Card variant="surface" style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>المتبقي</Text>
+          <AppText style={styles.summaryLabel}>المتبقي</AppText>
           <MoneyText amount={remaining} size={theme.typography.section} />
         </Card>
       </View>
       <View style={styles.switchRow}>
-        <Text style={styles.switchLabel}>اللي لم يدفعوا فقط</Text>
+        <AppText style={styles.switchLabel}>اللي لم يدفعوا فقط</AppText>
         <Switch
           value={unpaidOnly}
           onValueChange={setUnpaidOnly}
@@ -104,8 +106,8 @@ export default function CollectionScreen() {
           accessibilityLabel="اللي لم يدفعوا فقط"
         />
       </View>
-      {error ? <Text style={styles.error}>تعذر تحميل التحصيل: {error}</Text> : null}
-      {loading ? <Text style={styles.message}>جارٍ تحميل الشقق...</Text> : null}
+      {error ? <AppText style={styles.error}>تعذر تحميل التحصيل: {error}</AppText> : null}
+      {loading ? <AppText style={styles.message}>جارٍ تحميل الشقق...</AppText> : null}
       {!loading && rows.length === 0 ? (
         <EmptyState message="لا توجد شقق نشطة أو رسوم مستحقة لهذا الشهر. راجع شهر بداية الاشتراك أو أضف الشقق من المزيد." />
       ) : null}
@@ -132,22 +134,22 @@ export default function CollectionScreen() {
                     summary.status === 'partial' && styles.avatarPartial,
                     summary.status === 'unpaid' && styles.avatarUnpaid,
                   ]}>
-                  <Text style={[
+                  <AppText style={[
                     styles.apartmentAvatarText,
                     summary.status === 'paid' && styles.avatarTextPaid,
                     summary.status === 'partial' && styles.avatarTextPartial,
                     summary.status === 'unpaid' && styles.avatarTextUnpaid,
-                  ]}>{apartment.number}</Text>
+                  ]}>{apartment.number}</AppText>
                 </View>
                 <View style={styles.apartmentName}>
-                  <Text style={styles.apartmentTitle}>شقة {apartment.number}</Text>
-                  <Text style={styles.owner}>{apartment.owner_name || 'اسم المالك غير مسجل'}</Text>
+                  <AppText style={styles.apartmentTitle}>شقة {apartment.number}</AppText>
+                  <AppText style={styles.owner}>{apartment.owner_name || 'اسم المالك غير مسجل'}</AppText>
                 </View>
               </View>
               <View style={styles.moneyRow}>
-                <Text style={styles.remainingLabel}>
+                <AppText style={styles.remainingLabel}>
                   {summary.remaining === 0 ? 'المتبقي' : 'المتبقي للدفع'}
-                </Text>
+                </AppText>
                 <MoneyText amount={summary.remaining} size={theme.typography.section} />
               </View>
             </Pressable>
@@ -203,7 +205,7 @@ const styles = StyleSheet.create({
   summaryLabel: {
     color: theme.colors.secondaryText,
     fontSize: theme.typography.body,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   switchRow: {
     minHeight: theme.sizes.touchMedium,
@@ -216,7 +218,7 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontSize: theme.typography.body,
     fontFamily: theme.typography.bold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   message: {
     color: theme.colors.secondaryText,
@@ -226,7 +228,7 @@ const styles = StyleSheet.create({
   error: {
     color: theme.colors.danger,
     fontSize: theme.typography.body,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   apartmentHeader: {
     flexDirection: 'row',
@@ -258,12 +260,12 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontSize: theme.typography.section,
     fontFamily: theme.typography.extraBold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   owner: {
     color: theme.colors.secondaryText,
     fontSize: theme.typography.body,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   chip: {
     paddingHorizontal: theme.spacingScale.xs,

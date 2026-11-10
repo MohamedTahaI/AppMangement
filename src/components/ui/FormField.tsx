@@ -1,5 +1,6 @@
+import { AppText } from '@/components/ui/AppText';
 import { MaterialIcons } from '@expo/vector-icons';
-import { I18nManager, StyleSheet, Text, TextInput, TextInputProps, View } from 'react-native';
+import { I18nManager, StyleSheet, TextInput, TextInputProps, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 import { useEffect } from 'react';
 
@@ -34,7 +35,7 @@ export function FormField({ label, error, icon, style, ...props }: FormFieldProp
 
   return (
     <Animated.View style={[styles.container, animatedStyle]}>
-      <Text style={styles.label}>{label}</Text>
+      <AppText style={styles.label}>{label}</AppText>
       <View style={[styles.inputShell, error ? styles.invalidInput : null]}>
         {icon ? <MaterialIcons name={icon} size={theme.sizes.icon} color={theme.colors.secondaryText} /> : null}
         <TextInput
@@ -42,10 +43,9 @@ export function FormField({ label, error, icon, style, ...props }: FormFieldProp
           placeholderTextColor={theme.colors.secondaryText}
           accessibilityHint={error ?? undefined}
           style={[styles.input, style]}
-          textAlign="right"
         />
       </View>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <AppText style={styles.error}>{error}</AppText> : null}
     </Animated.View>
   );
 }
@@ -55,10 +55,12 @@ const styles = StyleSheet.create({
     gap: designTheme.spacingScale.xs,
   },
   label: {
+    width: '100%',
     color: theme.colors.text,
     fontSize: designTheme.typography.body,
     fontFamily: designTheme.typography.bold,
-    textAlign: 'right',
+    textAlign: 'auto',
+    writingDirection: 'rtl',
   },
   inputShell: {
     minHeight: theme.sizes.input,
@@ -82,9 +84,11 @@ const styles = StyleSheet.create({
   },
   invalidInput: { borderColor: theme.colors.danger },
   error: {
+    width: '100%',
     color: theme.colors.danger,
     fontSize: designTheme.typography.body,
     fontFamily: designTheme.typography.bold,
-    textAlign: 'right',
+    textAlign: 'auto',
+    writingDirection: 'rtl',
   },
 });

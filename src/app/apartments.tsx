@@ -1,12 +1,7 @@
+import { AppText } from '@/components/ui/AppText';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import {
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 
 import {
   addApartment,
@@ -159,7 +154,7 @@ export default function ApartmentsScreen() {
               autoCorrect={false}
             />
             <BigButton title="إضافة شقة" onPress={openNew} />
-            {error ? <Text style={styles.error}>{error}</Text> : null}
+            {error ? <AppText style={styles.error}>{error}</AppText> : null}
             {loading ? (
               <View style={styles.skeletonList}>
                 <Skeleton height={theme.sizes.regularCardHeight} />
@@ -187,18 +182,18 @@ export default function ApartmentsScreen() {
                 })}
                 style={styles.apartmentRow}>
                 <View style={styles.apartmentAvatar}>
-                  <Text style={styles.apartmentAvatarText}>{apartment.number}</Text>
+                  <AppText style={styles.apartmentAvatarText}>{apartment.number}</AppText>
                 </View>
                 <View style={styles.apartmentCopy}>
-                  <Text style={styles.owner}>{apartment.owner_name || 'اسم المالك غير مسجل'}</Text>
+                  <AppText style={styles.owner}>{apartment.owner_name || 'اسم المالك غير مسجل'}</AppText>
                 </View>
               </Pressable>
               <View style={styles.actions}>
                 <Pressable onPress={() => openEdit(apartment)} style={styles.actionButton}>
-                  <Text style={styles.actionText}>تعديل</Text>
+                  <AppText style={styles.actionText}>تعديل</AppText>
                 </Pressable>
                 <Pressable onPress={() => setPendingDeactivate(apartment)} style={styles.actionButton}>
-                  <Text style={styles.deleteText}>إيقاف الشقة</Text>
+                  <AppText style={styles.deleteText}>إيقاف الشقة</AppText>
                 </Pressable>
               </View>
             </Card>
@@ -221,7 +216,7 @@ export default function ApartmentsScreen() {
           onChangeText={setOwnerName}
           placeholder="اختياري"
         />
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? <AppText style={styles.error}>{error}</AppText> : null}
         <BigButton
           title={editing ? 'تأكيد الحفظ' : 'حفظ الشقة'}
           loading={saving}
@@ -297,7 +292,7 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontSize: theme.typography.body,
     fontFamily: theme.typography.bold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   actions: {
     flexDirection: 'row',
@@ -324,6 +319,6 @@ const styles = StyleSheet.create({
     color: theme.colors.danger,
     fontSize: theme.typography.body,
     fontFamily: theme.typography.bold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
 });

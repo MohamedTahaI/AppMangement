@@ -1,12 +1,9 @@
+import { SectionHeader } from '@/components/ui/SectionHeader';
+import { formatDate } from '@/services/dateFormat';
+import { AppText } from '@/components/ui/AppText';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { listExpenses, type Expense } from '@/db/expenses';
 import { getDatabase, markDirty } from '@/db/schema';
@@ -190,27 +187,27 @@ export default function SpecialDetailsScreen() {
         <BackButton onPress={() => router.back()} label="رجوع" />
         {collection ? (
           <>
-            <ScreenTitle title={collection.title} subtitle={`تاريخ التحصيل: ${collection.date}`} />
+            <ScreenTitle title={collection.title} subtitle={`تاريخ التحصيل: ${formatDate(collection.date)}`} />
             <View style={styles.summaryRow}>
               <Card variant="surface" style={styles.summaryCard}>
-                <Text style={styles.label}>المطلوب</Text>
+                <AppText style={styles.label}>المطلوب</AppText>
                 <MoneyText amount={collection.totalTarget} size={theme.typography.section} />
               </Card>
               <Card variant="surface" style={styles.summaryCard}>
-                <Text style={styles.label}>المحصل</Text>
+                <AppText style={styles.label}>المحصل</AppText>
                 <MoneyText amount={collection.totalCollected} size={theme.typography.section} />
               </Card>
             </View>
             <Card variant="surface" style={styles.fundCard}>
-              <Text style={styles.label}>المتبقي من الصندوق (المحصل − المصروفات المرتبطة)</Text>
+              <AppText style={styles.label}>المتبقي من الصندوق (المحصل − المصروفات المرتبطة)</AppText>
               <MoneyText amount={collection.totalCollected - collection.linkedExpenses} />
-              <Text style={styles.helper}>مصروفات مرتبطة: {formatMoney(collection.linkedExpenses)}</Text>
+              <AppText style={styles.helper}>مصروفات مرتبطة: {formatMoney(collection.linkedExpenses)}</AppText>
             </Card>
-            {collection.note ? <Text style={styles.helper}>{collection.note}</Text> : null}
+            {collection.note ? <AppText style={styles.helper}>{collection.note}</AppText> : null}
           </>
         ) : null}
 
-        <Text style={styles.sectionTitle}>الشقق</Text>
+        <SectionHeader title="الشقق" />
         <FilterBar
           search={search}
           onSearchChange={setSearch}
@@ -223,6 +220,7 @@ export default function SpecialDetailsScreen() {
             { value: 'apartment', label: 'رقم الشقة' },
             { value: 'remaining', label: 'أكبر متبقي' },
           ]}
+          defaultSort="apartment"
           onSortChange={setSort}
           extraFilterCount={Number(unpaidOnly)}
           extraFilters={
@@ -231,7 +229,7 @@ export default function SpecialDetailsScreen() {
               accessibilityState={{ checked: unpaidOnly }}
               onPress={() => setUnpaidOnly((value) => !value)}
               style={[styles.switch, unpaidOnly && styles.switchOn]}>
-              <Text style={[styles.switchText, unpaidOnly && styles.switchTextOn]}>اللي لم يدفعوا فقط</Text>
+              <AppText style={[styles.switchText, unpaidOnly && styles.switchTextOn]}>اللي لم يدفعوا فقط</AppText>
             </Pressable>
           }
           resultCount={filteredApartments.length}
@@ -239,9 +237,9 @@ export default function SpecialDetailsScreen() {
           totalAmount={filteredApartments.reduce((sum, apartment) => sum + apartment.remaining, 0)}
           onClear={() => { setSearch(''); setStatusFilter('all'); setSort('apartment'); setUnpaidOnly(false); }}
         />
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {success ? <Text style={styles.success}>{success}</Text> : null}
-        {loading ? <Text style={styles.message}>جارٍ تحميل التفاصيل...</Text> : null}
+        {error ? <AppText style={styles.error}>{error}</AppText> : null}
+        {success ? <AppText style={styles.success}>{success}</AppText> : null}
+        {loading ? <AppText style={styles.message}>جارٍ تحميل التفاصيل...</AppText> : null}
         {!loading && filteredApartments.length === 0 ? (
           <EmptyState message={unpaidOnly ? 'كل الشقق سددت هذا التحصيل.' : 'لا توجد رسوم مسجلة لهذا التحصيل.'} />
         ) : null}
@@ -255,25 +253,25 @@ export default function SpecialDetailsScreen() {
                 })}
                 style={styles.apartmentRow}>
                 <View style={styles.apartmentDetails}>
-                  <Text style={styles.apartmentTitle}>شقة {apartment.apartmentNumber}</Text>
-                  {apartment.ownerName ? <Text style={styles.helper}>{apartment.ownerName}</Text> : null}
+                  <AppText style={styles.apartmentTitle}>شقة {apartment.apartmentNumber}</AppText>
+                  {apartment.ownerName ? <AppText style={styles.helper}>{apartment.ownerName}</AppText> : null}
                   <StatusChip status={apartment.status} />
                 </View>
                 <View style={styles.amountDetails}>
-                  <Text style={styles.helper}>المتبقي</Text>
+                  <AppText style={styles.helper}>المتبقي</AppText>
                   <MoneyText amount={apartment.remaining} size={theme.typography.section} />
                 </View>
               </Pressable>
               <View style={styles.editRow}>
-                <Text style={styles.helper}>المطلوب: {formatMoney(apartment.due)}</Text>
+                <AppText style={styles.helper}>المطلوب: {formatMoney(apartment.due)}</AppText>
                 <View style={styles.rowActions}>
                   {apartment.remaining > 0 ? (
                     <Pressable onPress={() => openPayment(apartment)} style={styles.smallButton}>
-                      <Text style={styles.editText}>دفع</Text>
+                      <AppText style={styles.editText}>دفع</AppText>
                     </Pressable>
                   ) : null}
                   <Pressable onPress={() => requestEditAmount(apartment)} style={styles.smallButton}>
-                    <Text style={styles.editText}>تعديل المبلغ</Text>
+                    <AppText style={styles.editText}>تعديل المبلغ</AppText>
                   </Pressable>
                 </View>
               </View>
@@ -281,7 +279,7 @@ export default function SpecialDetailsScreen() {
           );
         })}
 
-        <Text style={styles.sectionTitle}>المصروفات المرتبطة</Text>
+        <SectionHeader title="المصروفات المرتبطة" />
         {!loading && expenses.length === 0 ? (
           <EmptyState message="لا توجد مصروفات مرتبطة بهذا التحصيل." />
         ) : null}
@@ -289,8 +287,8 @@ export default function SpecialDetailsScreen() {
           <Card key={expense.id}>
             <View style={styles.expenseRow}>
               <View style={styles.expenseDetails}>
-                <Text style={styles.apartmentTitle}>{expense.expense_date}</Text>
-                {expense.note ? <Text style={styles.helper}>{expense.note}</Text> : null}
+                <AppText style={styles.apartmentTitle}>{formatDate(expense.expense_date)}</AppText>
+                {expense.note ? <AppText style={styles.helper}>{expense.note}</AppText> : null}
               </View>
               <MoneyText amount={expense.amount} size={theme.typography.section} />
             </View>
@@ -306,11 +304,11 @@ export default function SpecialDetailsScreen() {
         title="تعديل المبلغ المطلوب"
         snapPoints={['55%']}
         onClose={() => setEditTarget(null)}>
-        <Text style={styles.helper}>
+        <AppText style={styles.helper}>
           المبلغ الحالي لشقة {editTarget?.apartmentNumber}: {formatMoney(editTarget?.due ?? 0)}
-        </Text>
+        </AppText>
         <FormField label="المبلغ الجديد" value={editAmount} onChangeText={setEditAmount} keyboardType="decimal-pad" />
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? <AppText style={styles.error}>{error}</AppText> : null}
         <BigButton title="حفظ التعديل" onPress={() => void saveApartmentAmount()} />
         <BigButton
           title="إلغاء"
@@ -325,11 +323,11 @@ export default function SpecialDetailsScreen() {
         onClose={() => setPaymentTarget(null)}>
         {paymentTarget ? (
           <>
-            <Text style={styles.helper}>المتبقي: {formatMoney(paymentTarget.remaining)}</Text>
+            <AppText style={styles.helper}>المتبقي: {formatMoney(paymentTarget.remaining)}</AppText>
             <FormField label="المبلغ" value={paymentAmount} onChangeText={setPaymentAmount} keyboardType="decimal-pad" />
             <FormField label="تاريخ الدفع" value={paymentDate} onChangeText={setPaymentDate} />
             <FormField label="ملاحظة (اختياري)" value={paymentNote} onChangeText={setPaymentNote} />
-            {error ? <Text style={styles.error}>{error}</Text> : null}
+            {error ? <AppText style={styles.error}>{error}</AppText> : null}
             <BigButton
               title="تسجيل الدفعة"
               loading={savingPayment}
@@ -397,12 +395,12 @@ const styles = StyleSheet.create({
   label: {
     color: theme.colors.secondaryText,
     fontSize: theme.typography.body,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   helper: {
     color: theme.colors.secondaryText,
     fontSize: theme.typography.body,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   switchRow: {
     minHeight: theme.sizes.touchCompact + theme.spacingScale.xs / 2,
@@ -440,7 +438,7 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontSize: theme.typography.heading,
     fontFamily: theme.typography.extraBold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   message: {
     color: theme.colors.secondaryText,
@@ -450,13 +448,13 @@ const styles = StyleSheet.create({
   error: {
     color: theme.colors.danger,
     fontSize: theme.typography.body,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   success: {
     color: theme.colors.success,
     fontSize: theme.typography.body,
     fontFamily: theme.typography.bold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   apartmentRow: {
     flexDirection: 'row',
@@ -472,7 +470,7 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontSize: theme.typography.section,
     fontFamily: theme.typography.extraBold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   chip: {
     paddingHorizontal: theme.spacingScale.xs,

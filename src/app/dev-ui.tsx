@@ -1,6 +1,7 @@
+import { AppText } from '@/components/ui/AppText';
 import { Redirect, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { AnimatedListItem } from '@/components/ui/AnimatedListItem';
 import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
@@ -53,29 +54,29 @@ export default function DevUiScreen() {
         <ScreenHeader title="تجربة عناصر الواجهة" subtitle="صفحة مؤقتة لاختبار الشكل والحركة" />
 
         <GradientCard>
-          <Text style={styles.heroTitle}>بطاقة متدرجة</Text>
+          <AppText style={styles.heroTitle}>بطاقة متدرجة</AppText>
           <AnimatedNumber value={number} suffix=" ج" style={styles.heroNumber} />
         </GradientCard>
         <Card>
-          <Text style={styles.title}>البطاقات والمبالغ</Text>
+          <AppText style={styles.title}>البطاقات والمبالغ</AppText>
           <MoneyText amount={number} />
           <PressableCard
             onPress={() => setNumber((value) => value + 100)}
             cardStyle={styles.pressableCard}>
-            <Text style={styles.rowText}>اضغط لزيادة الرقم 100 ج</Text>
+            <AppText style={styles.rowText}>اضغط لزيادة الرقم 100 ج</AppText>
           </PressableCard>
         </Card>
 
         <Card>
-          <Text style={styles.title}>الشهر والانتقال</Text>
+          <AppText style={styles.title}>الشهر والانتقال</AppText>
           <MonthPicker month={month} onChange={setMonth} />
           <MonthTransition month={month}>
-            <Text style={styles.rowText}>{getMonthLabel(month)}</Text>
+            <AppText style={styles.rowText}>{getMonthLabel(month)}</AppText>
           </MonthTransition>
         </Card>
 
         <Card>
-          <Text style={styles.title}>الحالة وشريط التقدم</Text>
+          <AppText style={styles.title}>الحالة وشريط التقدم</AppText>
           <View style={styles.statusRow}>
             <StatusChip status={chipStatus} />
             <BigButton
@@ -98,7 +99,7 @@ export default function DevUiScreen() {
         </Card>
 
         <Card>
-          <Text style={styles.title}>الأزرار والاختيار</Text>
+          <AppText style={styles.title}>الأزرار والاختيار</AppText>
           <BigButton title="زر أساسي" onPress={() => setToastVisible(true)} />
           <BigButton title="زر ثانوي" variant="secondary" onPress={() => setSheetVisible(true)} />
           <BigButton title="زر خطر" variant="danger" onPress={() => setConfirmVisible(true)} />
@@ -121,7 +122,7 @@ export default function DevUiScreen() {
         </Card>
 
         <Card>
-          <Text style={styles.title}>إدخال البيانات</Text>
+          <AppText style={styles.title}>إدخال البيانات</AppText>
           <FormField
             label="حقل تجريبي"
             value={fieldValue}
@@ -137,7 +138,7 @@ export default function DevUiScreen() {
         </Card>
 
         <Card>
-          <Text style={styles.title}>التحميل والحالة الفارغة</Text>
+          <AppText style={styles.title}>التحميل والحالة الفارغة</AppText>
           {showSkeleton ? (
             <View style={styles.skeletonGroup}>
               <Skeleton height={theme.sizes.touch + theme.spacingScale.xs} />
@@ -155,18 +156,18 @@ export default function DevUiScreen() {
         </Card>
 
         <Card>
-          <Text style={styles.title}>تأكيد ونجاح وإشعار</Text>
+          <AppText style={styles.title}>تأكيد ونجاح وإشعار</AppText>
           <BigButton title="فتح التأكيد" variant="danger" onPress={() => setConfirmVisible(true)} />
           <BigButton title="عرض النجاح" onPress={() => setSuccessVisible(true)} />
           <BigButton title="عرض الإشعار" variant="secondary" onPress={() => setToastVisible(true)} />
         </Card>
 
         <Card>
-          <Text style={styles.title}>عناصر قائمة متتابعة (50 عنصرًا)</Text>
+          <AppText style={styles.title}>عناصر قائمة متتابعة (50 عنصرًا)</AppText>
           {Array.from({ length: 50 }, (_, index) => (
             <AnimatedListItem key={index} index={index}>
               <View style={styles.listItem}>
-                <Text style={styles.rowText}>عنصر رقم {index + 1}</Text>
+                <AppText style={styles.rowText}>عنصر رقم {index + 1}</AppText>
               </View>
             </AnimatedListItem>
           ))}
@@ -182,7 +183,7 @@ export default function DevUiScreen() {
         visible={sheetVisible}
         title="لوحة سفلية تجريبية"
         onClose={() => setSheetVisible(false)}>
-        <Text style={styles.rowText}>اسحب لأسفل لإغلاق هذه اللوحة.</Text>
+        <AppText style={styles.rowText}>اسحب لأسفل لإغلاق هذه اللوحة.</AppText>
       </AppBottomSheet>
       <ConfirmDialog
         visible={confirmVisible}
@@ -216,10 +217,10 @@ const styles = StyleSheet.create({
   },
   back: { minHeight: theme.sizes.touchCompact, justifyContent: 'center', alignSelf: 'flex-start' },
   backText: { color: theme.colors.primary, fontSize: theme.typography.body, fontFamily: theme.typography.bold },
-  title: { color: theme.colors.text, fontSize: theme.typography.section, fontFamily: theme.typography.extraBold, textAlign: 'right' },
+  title: { color: theme.colors.text, fontSize: theme.typography.section, fontFamily: theme.typography.extraBold, textAlign: 'auto' },
   heroTitle: { color: theme.colors.onPrimary, fontSize: theme.typography.section, fontFamily: theme.typography.bold },
   heroNumber: { color: theme.colors.onPrimary, fontSize: theme.typography.number },
-  rowText: { color: theme.colors.text, fontSize: theme.typography.body, textAlign: 'right' },
+  rowText: { color: theme.colors.text, fontSize: theme.typography.body, textAlign: 'auto' },
   pressableCard: { backgroundColor: theme.colors.successBackground },
   statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacingScale.xs },
   skeletonGroup: { gap: theme.spacingScale.xs },

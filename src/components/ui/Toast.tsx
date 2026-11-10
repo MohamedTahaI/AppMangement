@@ -1,5 +1,6 @@
+import { AppText } from '@/components/ui/AppText';
 import { useEffect } from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { StyleSheet } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { useMotion } from '@/hooks/useMotion';
@@ -45,7 +46,7 @@ export function Toast({
   if (!visible) return null;
   return (
     <Animated.View accessibilityRole="alert" style={[styles.toast, { backgroundColor: BACKGROUND[variant] }, animatedStyle]}>
-      <Text style={styles.message}>{message}</Text>
+      <AppText style={styles.message}>{message}</AppText>
     </Animated.View>
   );
 }
@@ -53,8 +54,8 @@ export function Toast({
 const styles = StyleSheet.create({
   toast: {
     position: 'absolute',
-    left: theme.spacingScale.md,
-    right: theme.spacingScale.md,
+    start: theme.spacingScale.md,
+    end: theme.spacingScale.md,
     bottom: theme.spacingScale.xl,
     zIndex: 100,
     minHeight: theme.sizes.touch,

@@ -17,7 +17,7 @@ export default function TabLayout() {
       }}>
       <Tabs.Screen name="index" options={{ title: 'الرئيسية' }} />
       <Tabs.Screen name="collection" options={{ title: 'التحصيل' }} />
-      <Tabs.Screen name="expenses" options={{ title: 'المصروفات' }} />
+      <Tabs.Screen name="expenses" options={{ title: 'المصاريف' }} />
     </Tabs>
   );
 }

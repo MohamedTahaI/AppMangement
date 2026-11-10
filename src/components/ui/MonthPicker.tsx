@@ -1,6 +1,7 @@
+import { AppText } from '@/components/ui/AppText';
 import { useState } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
-import { I18nManager, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AppBottomSheet } from './AppBottomSheet';
 import { theme } from './theme';
@@ -45,9 +46,15 @@ export interface MonthPickerProps {
   maxYear?: number;
 }
 
-export function MonthPicker({ month, onChange, minYear = 2000, maxYear = 2100 }: MonthPickerProps) {
+export function MonthPicker({
+  month,
+  onChange,
+  minYear = 2000,
+  maxYear = new Date().getFullYear(),
+}: MonthPickerProps) {
   const [pickerVisible, setPickerVisible] = useState(false);
   const [year, setYear] = useState(Number(month.slice(0, 4)));
+  const nextMonthDisabled = month >= getCurrentMonth();
   const chooseMonth = (monthNumber: number) => {
     onChange(`${year}-${String(monthNumber).padStart(2, '0')}`);
     setPickerVisible(false);
@@ -61,7 +68,7 @@ export function MonthPicker({ month, onChange, minYear = 2000, maxYear = 2100 }:
           accessibilityRole="button"
           onPress={() => onChange(shift(month, -1))}
           style={styles.arrow}>
-          <MaterialIcons name={I18nManager.isRTL ? 'chevron-right' : 'chevron-left'} size={theme.sizes.iconLarge} color={theme.colors.primary} />
+          <MaterialIcons name="chevron-right" size={theme.sizes.iconLarge} color={theme.colors.primary} />
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -71,14 +78,16 @@ export function MonthPicker({ month, onChange, minYear = 2000, maxYear = 2100 }:
             setPickerVisible(true);
           }}
           style={styles.monthButton}>
-          <Text style={styles.label}>{getMonthLabel(month)}</Text>
+          <AppText style={styles.label}>{getMonthLabel(month)}</AppText>
         </Pressable>
         <Pressable
           accessibilityLabel="الشهر التالي"
           accessibilityRole="button"
+          accessibilityState={{ disabled: nextMonthDisabled }}
+          disabled={nextMonthDisabled}
           onPress={() => onChange(shift(month, 1))}
-          style={styles.arrow}>
-          <MaterialIcons name={I18nManager.isRTL ? 'chevron-left' : 'chevron-right'} size={theme.sizes.iconLarge} color={theme.colors.primary} />
+          style={[styles.arrow, nextMonthDisabled && styles.arrowDisabled]}>
+          <MaterialIcons name="chevron-left" size={theme.sizes.iconLarge} color={nextMonthDisabled ? theme.colors.muted : theme.colors.primary} />
         </Pressable>
       </View>
       <AppBottomSheet
@@ -89,18 +98,20 @@ export function MonthPicker({ month, onChange, minYear = 2000, maxYear = 2100 }:
         <View style={styles.yearRow}>
           <Pressable
             accessibilityRole="button"
+            accessibilityState={{ disabled: year <= minYear }}
             disabled={year <= minYear}
             onPress={() => setYear((value) => Math.max(minYear, value - 1))}
-            style={styles.arrow}>
-            <MaterialIcons name={I18nManager.isRTL ? 'chevron-right' : 'chevron-left'} size={theme.sizes.iconLarge} color={theme.colors.primary} />
+            style={[styles.arrow, year <= minYear && styles.arrowDisabled]}>
+            <MaterialIcons name="chevron-right" size={theme.sizes.iconLarge} color={year <= minYear ? theme.colors.muted : theme.colors.primary} />
           </Pressable>
-          <Text style={styles.year}>{year}</Text>
+          <AppText style={styles.year}>{year}</AppText>
           <Pressable
             accessibilityRole="button"
+            accessibilityState={{ disabled: year >= maxYear }}
             disabled={year >= maxYear}
             onPress={() => setYear((value) => Math.min(maxYear, value + 1))}
-            style={styles.arrow}>
-            <MaterialIcons name={I18nManager.isRTL ? 'chevron-left' : 'chevron-right'} size={theme.sizes.iconLarge} color={theme.colors.primary} />
+            style={[styles.arrow, year >= maxYear && styles.arrowDisabled]}>
+            <MaterialIcons name="chevron-left" size={theme.sizes.iconLarge} color={year >= maxYear ? theme.colors.muted : theme.colors.primary} />
           </Pressable>
         </View>
         <View style={styles.monthGrid}>
@@ -115,7 +126,7 @@ export function MonthPicker({ month, onChange, minYear = 2000, maxYear = 2100 }:
                 accessibilityState={{ selected }}
                 onPress={() => chooseMonth(monthNumber)}
                 style={[styles.monthOption, selected && styles.monthSelected]}>
-                <Text style={[styles.monthText, selected && styles.monthTextSelected]}>{name}</Text>
+                <AppText style={[styles.monthText, selected && styles.monthTextSelected]}>{name}</AppText>
               </Pressable>
             );
           })}
@@ -128,6 +139,7 @@ export function MonthPicker({ month, onChange, minYear = 2000, maxYear = 2100 }:
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
+    direction: 'rtl',
     justifyContent: 'space-between',
     alignItems: 'center',
     minHeight: theme.sizes.touchCompact + theme.spacingScale.xs / 2,
@@ -141,6 +153,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  arrowDisabled: { opacity: 0.55 },
   monthButton: { flex: 1, minHeight: theme.sizes.touchCompact, alignItems: 'center', justifyContent: 'center' },
   label: {
     color: theme.colors.text,
@@ -150,6 +163,7 @@ const styles = StyleSheet.create({
   },
   yearRow: {
     flexDirection: 'row',
+    direction: 'rtl',
     alignItems: 'center',
     justifyContent: 'space-between',
     minHeight: theme.sizes.touch,

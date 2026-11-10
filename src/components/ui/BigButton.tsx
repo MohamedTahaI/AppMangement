@@ -1,11 +1,6 @@
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  type StyleProp,
-  type ViewStyle,
-} from 'react-native';
+import { AppText } from '@/components/ui/AppText';
+import { MaterialIcons } from '@expo/vector-icons';
+import { ActivityIndicator, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 
@@ -17,6 +12,9 @@ export interface BigButtonProps {
   disabled?: boolean;
   loading?: boolean;
   variant?: 'primary' | 'secondary' | 'danger';
+  size?: 'default' | 'compact';
+  icon?: keyof typeof MaterialIcons.glyphMap;
+  numberOfLines?: number;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -26,8 +24,12 @@ export function BigButton({
   disabled = false,
   loading = false,
   variant = 'primary',
+  size = 'default',
+  icon,
+  numberOfLines,
   style,
 }: BigButtonProps) {
+  const compact = size === 'compact';
   const backgroundColor = variant === 'danger' ? theme.colors.danger : theme.colors.surface;
   const textColor = variant === 'secondary' ? theme.colors.primary : theme.colors.surface;
 
@@ -41,6 +43,7 @@ export function BigButton({
       }}
       style={({ pressed }) => [
         styles.button,
+        compact && styles.compact,
         { backgroundColor: variant === 'primary' ? 'transparent' : backgroundColor },
         variant === 'secondary' && styles.secondary,
         variant === 'danger' && styles.danger,
@@ -59,7 +62,14 @@ export function BigButton({
       {loading ? (
         <ActivityIndicator color={textColor} />
       ) : (
-        <Text style={[styles.text, { color: textColor }]}>{title}</Text>
+        <View style={compact ? styles.compactContent : undefined}>
+          {compact && icon ? <MaterialIcons name={icon} size={18} color={textColor} /> : null}
+          <AppText
+            numberOfLines={numberOfLines ?? (compact ? 1 : undefined)}
+            style={[styles.text, compact && styles.compactText, { color: textColor }]}>
+            {title}
+          </AppText>
+        </View>
       )}
     </Pressable>
   );
@@ -74,6 +84,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+  },
+  compact: {
+    height: 40,
+    minHeight: 40,
+    paddingHorizontal: 14,
+    paddingVertical: 0,
+    borderRadius: 12,
+  },
+  compactContent: {
+    width: '100%',
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
   },
   secondary: {
     borderWidth: theme.borderWidths.hairline,
@@ -90,5 +115,10 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.body,
     fontFamily: theme.typography.bold,
     textAlign: 'center',
+  },
+  compactText: {
+    flexShrink: 1,
+    fontSize: 15,
+    fontFamily: theme.typography.medium,
   },
 });

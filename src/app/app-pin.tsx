@@ -1,6 +1,7 @@
+import { AppText } from '@/components/ui/AppText';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet, Text } from 'react-native';
+import { ScrollView, StyleSheet } from 'react-native';
 
 import { BigButton } from '@/components/ui/BigButton';
 import { BackButton } from '@/components/ui/BackButton';
@@ -9,6 +10,7 @@ import { FormField } from '@/components/ui/FormField';
 import { ScreenTitle } from '@/components/ui/ScreenTitle';
 import { theme } from '@/components/ui/theme';
 import { disableAppPin, isAppPinEnabled, setAppPin, verifyAppPin } from '@/services/appPin';
+import { arabicErrorMessage } from '@/services/errors';
 
 export default function AppPinScreen() {
   const router = useRouter();
@@ -25,7 +27,7 @@ export default function AppPinScreen() {
     try {
       setEnabled(await isAppPinEnabled());
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'تعذر تحميل إعداد رمز الدخول.');
+      setError(arabicErrorMessage(loadError, 'تعذر تحميل إعداد رمز الدخول.'));
     }
   }, []);
 
@@ -52,7 +54,7 @@ export default function AppPinScreen() {
       setEnabled(true);
       setNotice('تم تشغيل رمز الدخول. سيُطلب عند فتح التطبيق.');
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'تعذر حفظ رمز الدخول.');
+      setError(arabicErrorMessage(saveError, 'تعذر حفظ رمز الدخول.'));
     } finally {
       setLoading(false);
     }
@@ -72,7 +74,7 @@ export default function AppPinScreen() {
       }
       setConfirmDisable(true);
     } catch (verifyError) {
-      setError(verifyError instanceof Error ? verifyError.message : 'تعذر التحقق من رمز الدخول.');
+      setError(arabicErrorMessage(verifyError, 'تعذر التحقق من رمز الدخول.'));
     } finally {
       setLoading(false);
     }
@@ -88,7 +90,7 @@ export default function AppPinScreen() {
       setEnabled(false);
       setNotice('تم إيقاف رمز الدخول.');
     } catch (disableError) {
-      setError(disableError instanceof Error ? disableError.message : 'تعذر إيقاف رمز الدخول.');
+      setError(arabicErrorMessage(disableError, 'تعذر إيقاف رمز الدخول.'));
     } finally {
       setLoading(false);
     }
@@ -99,9 +101,9 @@ export default function AppPinScreen() {
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <BackButton onPress={() => router.back()} label="رجوع" />
         <ScreenTitle title="رمز الدخول" subtitle="اختياري لحماية فتح التطبيق" />
-        <Text style={styles.status}>
+        <AppText style={styles.status}>
           حالة الحماية: {enabled ? 'رمز الدخول يعمل' : 'رمز الدخول متوقف'}
-        </Text>
+        </AppText>
 
         {enabled ? (
           <>
@@ -146,9 +148,9 @@ export default function AppPinScreen() {
           </>
         )}
 
-        <Text style={styles.help}>لا تحفظ الشفرة نفسها؛ يُحفظ رمز مشفّر فقط. اختر رقماً يسهل تذكره.</Text>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {notice ? <Text style={styles.notice}>{notice}</Text> : null}
+        <AppText style={styles.help}>لا تحفظ الشفرة نفسها؛ يُحفظ رمز مشفّر فقط. اختر رقماً يسهل تذكره.</AppText>
+        {error ? <AppText style={styles.error}>{error}</AppText> : null}
+        {notice ? <AppText style={styles.notice}>{notice}</AppText> : null}
       </ScrollView>
 
       <ConfirmDialog
@@ -188,22 +190,22 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontSize: theme.typography.section,
     fontFamily: theme.typography.extraBold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   help: {
     color: theme.colors.secondaryText,
     fontSize: theme.typography.body,
     lineHeight: theme.typography.lineHeightBody,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   error: {
     color: theme.colors.danger,
     fontSize: theme.typography.body,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   notice: {
     color: theme.colors.success,
     fontSize: theme.typography.body,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
 });

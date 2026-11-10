@@ -6,6 +6,7 @@ const SECRET = 'CHANGE_ME';
  *   "secret": "the same secret configured in the app",
  *   "action": "ping" | "sync",
  *   "data": {
+ *     "schemaVersion": 2,
  *     "summary": {
  *       "buildingName": "Building name",
  *       "generatedAt": "2026-11-09T12:00:00.000Z",
@@ -17,6 +18,10 @@ const SECRET = 'CHANGE_ME';
  *     },
  *     "monthlySummary": [
  *       { "month": "2026-11", "collected": 800, "expenses": 200 }
+ *     ],
+ *     "apartmentStatus": [
+ *       { "number": "1", "ownerName": "Owner", "due": 400, "paid": 400,
+ *         "remaining": 0, "status": "مدفوع", "monthsPaid": "2026-11" }
  *     ],
  *     "monthlyMatrix": [
  *       {
@@ -73,11 +78,13 @@ const SECRET = 'CHANGE_ME';
 
 const TAB_NAMES = {
   summary: 'ملخص',
+  monthlySummary: 'ملخص كل شهر',
+  apartmentStatus: 'حالة الشقق',
   specialCollections: 'التحصيلات الخاصة',
   expenses: 'المصروفات',
   payments: 'سجل المدفوعات',
   apartments: 'الشقق',
-  adjustments: 'التسويات',
+  adjustments: 'تعديل الرصيد',
 };
 
 const COLORS = {
@@ -135,9 +142,18 @@ function testWithSampleData() {
       totalExpenses: 650,
       balance: 1750,
     },
+    schemaVersion: 2,
     monthlySummary: [
       { month: '2026-10', collected: 1200, expenses: 250 },
       { month: '2026-11', collected: 1200, expenses: 400 },
+    ],
+    apartmentStatus: [
+      { number: '1', ownerName: 'أحمد', due: 400, paid: 400, remaining: 0, status: 'مدفوع', monthsPaid: '2026-10' },
+      { number: '2', ownerName: 'سارة', due: 400, paid: 0, remaining: 400, status: 'لم يدفع', monthsPaid: '' },
+    ],
+    expensesByCategory: [
+      { category: 'صيانة', total: 400 },
+      { category: 'الكهرباء', total: 250 },
     ],
     monthlyMatrix: [
       {
@@ -237,6 +253,8 @@ function validateSnapshot_(data) {
   const requiredArrays = [
     'monthlySummary',
     'monthlyMatrix',
+    'apartmentStatus',
+    'expensesByCategory',
     'specialCollections',
     'expenses',
     'payments',
@@ -250,6 +268,7 @@ function validateSnapshot_(data) {
     if (!Array.isArray(data[key])) throw new Error('قائمة البيانات غير صالحة: ' + key);
   });
   if (
+    Number(data.schemaVersion) !== 2 ||
     typeof data.summary.buildingName !== 'string' ||
     typeof data.summary.generatedAt !== 'string' ||
     !isFinite(Number(data.summary.totalCollected)) ||
@@ -263,7 +282,7 @@ function validateSnapshot_(data) {
 function writeSnapshot_(data) {
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   const monthlyTabNames = data.monthlyMatrix.map(function (entry) {
-    return 'الاشتراك الشهري ' + String(entry.year);
+    return 'الفاتورة الشهرية ' + String(entry.year);
   });
   const managedNames = Object.keys(TAB_NAMES).map(function (key) {
     return TAB_NAMES[key];
@@ -276,20 +295,22 @@ function writeSnapshot_(data) {
     ensureSheet_(spreadsheet, name);
   });
   spreadsheet.getSheets().forEach(function (sheet) {
-    if (/^الاشتراك الشهري \d{4}$/.test(sheet.getName()) &&
+    if (/^الفاتورة الشهرية \d{4}$/.test(sheet.getName()) &&
         managedNames.indexOf(sheet.getName()) === -1) {
       spreadsheet.deleteSheet(sheet);
     }
   });
 
   writeSummary_(spreadsheet.getSheetByName(TAB_NAMES.summary), data);
+  writeMonthlySummary_(spreadsheet.getSheetByName(TAB_NAMES.monthlySummary), data);
+  writeApartmentStatus_(spreadsheet.getSheetByName(TAB_NAMES.apartmentStatus), data);
   writeSpecialCollections_(spreadsheet.getSheetByName(TAB_NAMES.specialCollections), data);
   writeExpenses_(spreadsheet.getSheetByName(TAB_NAMES.expenses), data);
   writePayments_(spreadsheet.getSheetByName(TAB_NAMES.payments), data);
   writeApartments_(spreadsheet.getSheetByName(TAB_NAMES.apartments), data);
   writeAdjustments_(spreadsheet.getSheetByName(TAB_NAMES.adjustments), data);
   data.monthlyMatrix.forEach(function (yearData) {
-    writeMonthlyMatrix_(spreadsheet.getSheetByName('الاشتراك الشهري ' + yearData.year), yearData);
+    writeMonthlyMatrix_(spreadsheet.getSheetByName('الفاتورة الشهرية ' + yearData.year), yearData);
   });
 }
 
@@ -348,7 +369,7 @@ function writeSummary_(sheet, data) {
     ['اسم العمارة', summary.buildingName],
     ['آخر تحديث', summary.generatedAt],
     ['المحصل من المدفوعات', summary.collectedFromPayments || 0],
-    ['صافي التسويات', summary.netAdjustments || 0],
+    ['صافي تعديلات الرصيد', summary.netAdjustments || 0],
     ['إجمالي التحصيل', summary.totalCollected],
     ['إجمالي المصروفات', summary.totalExpenses],
     ['الرصيد', summary.balance],
@@ -418,13 +439,15 @@ function statusColor_(status) {
 }
 
 function writeSpecialCollections_(sheet, data) {
-  const headers = ['التحصيل الخاص', 'رقم الشقة', 'اسم المالك', 'المطلوب', 'المدفوع', 'المتبقي', 'الحالة'];
-  resetSheet_(sheet, headers, [190, 110, 180, 120, 120, 120, 110]);
+  const headers = ['التحصيل الخاص', 'التاريخ', 'لكل شقة', 'رقم الشقة', 'اسم المالك', 'المطلوب', 'المدفوع', 'المتبقي', 'الحالة'];
+  resetSheet_(sheet, headers, [190, 120, 120, 110, 180, 120, 120, 120, 110]);
   const rows = [];
   data.specialCollections.forEach(function (collection) {
     (collection.apartments || []).forEach(function (apartment) {
       rows.push([
         collection.title,
+        collection.date,
+        collection.amountPerApartment,
         apartment.number,
         apartment.ownerName,
         apartment.due,
@@ -436,7 +459,8 @@ function writeSpecialCollections_(sheet, data) {
   });
   appendRows_(sheet, rows, headers.length);
   if (rows.length) {
-    sheet.getRange(2, 4, rows.length, 3).setNumberFormat('#,##0.## "ج"');
+    sheet.getRange(2, 3, rows.length, 1).setNumberFormat('#,##0.## "ج"');
+    sheet.getRange(2, 6, rows.length, 3).setNumberFormat('#,##0.## "ج"');
     sheet.getRange(1, 1, rows.length + 1, headers.length).createFilter();
   }
 }
@@ -447,12 +471,24 @@ function writeExpenses_(sheet, data) {
   appendRows_(sheet, data.expenses.map(function (item) {
     return [item.date, item.category, item.amount, item.note, item.linkedCollection];
   }), headers.length);
-  if (data.expenses.length) sheet.getRange(2, 3, data.expenses.length, 1).setNumberFormat('#,##0.## "ج"');
+  if (data.expenses.length) {
+    sheet.getRange(2, 3, data.expenses.length, 1).setNumberFormat('#,##0.## "ج"');
+    sheet.getRange(1, 1, data.expenses.length + 1, headers.length).createFilter();
+  }
+  const start = data.expenses.length + 3;
+  sheet.getRange(start, 1, 1, 2).setValues([['إجمالي المصروفات حسب النوع', 'المبلغ']]);
+  sheet.getRange(start, 1, 1, 2).setFontWeight('bold').setBackground(COLORS.header);
+  appendRowsAt_(sheet, data.expensesByCategory.map(function (item) {
+    return [item.category, item.total];
+  }), 2, start + 1);
+  if (data.expensesByCategory.length) {
+    sheet.getRange(start + 1, 2, data.expensesByCategory.length, 1).setNumberFormat('#,##0.## "ج"');
+  }
 }
 
 function writePayments_(sheet, data) {
-  const headers = ['التاريخ', 'رقم الشقة', 'اسم المالك', 'النوع', 'الشهر / التحصيل', 'المبلغ'];
-  resetSheet_(sheet, headers, [120, 110, 180, 140, 190, 120]);
+  const headers = ['التاريخ', 'رقم الشقة', 'اسم المالك', 'النوع', 'الشهر / التحصيل', 'المبلغ', 'ملاحظة'];
+  resetSheet_(sheet, headers, [120, 110, 180, 140, 190, 120, 240]);
   appendRows_(sheet, data.payments.map(function (item) {
     return [
       item.date,
@@ -461,9 +497,34 @@ function writePayments_(sheet, data) {
       item.type,
       item.monthOrCollection,
       item.amount,
+      item.note,
     ];
   }), headers.length);
   if (data.payments.length) sheet.getRange(2, 6, data.payments.length, 1).setNumberFormat('#,##0.## "ج"');
+}
+
+function writeMonthlySummary_(sheet, data) {
+  const headers = ['الشهر', 'التحصيل', 'المصروفات'];
+  resetSheet_(sheet, headers, [140, 160, 160]);
+  appendRows_(sheet, data.monthlySummary.map(function (item) {
+    return [item.month, item.collected, item.expenses];
+  }), headers.length);
+  if (data.monthlySummary.length) {
+    sheet.getRange(2, 2, data.monthlySummary.length, 2).setNumberFormat('#,##0.## "ج"');
+    sheet.getRange(1, 1, data.monthlySummary.length + 1, headers.length).createFilter();
+  }
+}
+
+function writeApartmentStatus_(sheet, data) {
+  const headers = ['رقم الشقة', 'اسم المالك', 'المطلوب', 'المدفوع', 'المتبقي', 'الحالة', 'الشهور المدفوعة'];
+  resetSheet_(sheet, headers, [120, 180, 120, 120, 120, 110, 240]);
+  appendRows_(sheet, data.apartmentStatus.map(function (item) {
+    return [item.number, item.ownerName, item.due, item.paid, item.remaining, item.status, item.monthsPaid];
+  }), headers.length);
+  if (data.apartmentStatus.length) {
+    sheet.getRange(2, 3, data.apartmentStatus.length, 3).setNumberFormat('#,##0.## "ج"');
+    sheet.getRange(1, 1, data.apartmentStatus.length + 1, headers.length).createFilter();
+  }
 }
 
 function writeApartments_(sheet, data) {
@@ -476,12 +537,37 @@ function writeApartments_(sheet, data) {
 
 function writeAdjustments_(sheet, data) {
   const headers = ['التاريخ', 'النوع', 'المبلغ', 'السبب', 'الحالة', 'سبب الإلغاء'];
-  resetSheet_(sheet, headers, [120, 100, 120, 280, 100, 240]);
-  appendRows_(sheet, data.adjustments.map(function (item) {
+  const widths = [120, 100, 120, 280, 100, 240];
+  sheet.clear();
+  sheet.setRightToLeft(true);
+  sheet.setFrozenRows(3);
+  sheet.getRange(1, 1, 1, headers.length).merge();
+  sheet.getRange(1, 1).setValue('تعديل الرصيد');
+  sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground(COLORS.header);
+  sheet.getRange(2, 1, 1, headers.length).merge();
+  sheet.getRange(2, 1).setValue('استخدمها لو دخلت فلوس من بره العمارة، أو لتصحيح الرصيد، مع كتابة السبب');
+  sheet.getRange(2, 1, 1, headers.length).setWrap(true);
+  sheet.getRange(3, 1, 1, headers.length).setValues([headers.map(safeCell_)]);
+  sheet.getRange(3, 1, 1, headers.length).setFontWeight('bold').setBackground(COLORS.header);
+  headers.forEach(function (_, index) {
+    sheet.setColumnWidth(index + 1, widths[index]);
+  });
+  const rows = data.adjustments.map(function (item) {
     return [item.date, item.type, item.amount, item.reason, item.status, item.cancelReason];
-  }), headers.length);
+  });
+  appendRowsAt_(sheet, rows, headers.length, 4);
   if (data.adjustments.length) {
-    sheet.getRange(2, 3, data.adjustments.length, 1).setNumberFormat('#,##0.## "ج"');
-    sheet.getRange(1, 1, data.adjustments.length + 1, headers.length).createFilter();
+    sheet.getRange(4, 3, data.adjustments.length, 1).setNumberFormat('#,##0.## "ج"');
+    sheet.getRange(3, 1, data.adjustments.length + 1, headers.length).createFilter();
   }
+}
+
+function appendRowsAt_(sheet, rows, columnCount, startRow) {
+  if (rows.length === 0) return;
+  const values = rows.map(function (row) {
+    const padded = row.slice(0, columnCount);
+    while (padded.length < columnCount) padded.push('');
+    return padded.map(safeCell_);
+  });
+  sheet.getRange(startRow, 1, values.length, columnCount).setValues(values);
 }

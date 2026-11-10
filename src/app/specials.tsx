@@ -1,12 +1,7 @@
+import { AppText } from '@/components/ui/AppText';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { createSpecialCollection } from '@/services/billing';
 import {
@@ -24,6 +19,7 @@ import { FilterBar } from '@/components/ui/FilterBar';
 import { getCurrentMonth } from '@/components/ui/MonthPicker';
 import { MoneyText } from '@/components/ui/MoneyText';
 import { ScreenTitle } from '@/components/ui/ScreenTitle';
+import { formatDate } from '@/services/dateFormat';
 import { theme } from '@/components/ui/theme';
 import { arabicErrorMessage } from '@/services/errors';
 
@@ -140,7 +136,7 @@ export default function SpecialsScreen() {
           searchLabel="بحث باسم التحصيل أو الملاحظة"
           searchPlaceholder="اكتب اسم التحصيل"
           extraFilterCount={Number(collectionFilter !== 'month')}
-          extraFilters={
+          mainFilters={
             <View style={styles.filterRow}>
               {[
                 { value: 'month' as const, label: 'هذا الشهر' },
@@ -153,9 +149,9 @@ export default function SpecialsScreen() {
                   accessibilityState={{ selected: collectionFilter === option.value }}
                   onPress={() => setCollectionFilter(option.value)}
                   style={[styles.filterOption, collectionFilter === option.value && styles.filterOptionSelected]}>
-                  <Text style={[styles.filterText, collectionFilter === option.value && styles.filterTextSelected]}>
+                  <AppText style={[styles.filterText, collectionFilter === option.value && styles.filterTextSelected]}>
                     {option.label}
-                  </Text>
+                  </AppText>
                 </Pressable>
               ))}
             </View>
@@ -165,9 +161,9 @@ export default function SpecialsScreen() {
           totalAmount={visibleCollections.reduce((sum, collection) => sum + collection.totalTarget - collection.totalCollected, 0)}
           onClear={() => { setSearch(''); setCollectionFilter('month'); }}
         />
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {notice ? <Text style={styles.success}>{notice}</Text> : null}
-        {loading ? <Text style={styles.message}>جارٍ تحميل التحصيلات...</Text> : null}
+        {error ? <AppText style={styles.error}>{error}</AppText> : null}
+        {notice ? <AppText style={styles.success}>{notice}</AppText> : null}
+        {loading ? <AppText style={styles.message}>جارٍ تحميل التحصيلات...</AppText> : null}
         {!loading && visibleCollections.length === 0 ? (
           <EmptyState message="لا توجد تحصيلات خاصة. اضغط «تحصيل جديد» لإضافة تحصيل." />
         ) : null}
@@ -187,18 +183,18 @@ export default function SpecialsScreen() {
                   })
                 }>
                 <View style={styles.header}>
-                  <Text style={styles.title}>{collection.title}</Text>
-                  <Text style={styles.date}>{collection.date}</Text>
+                  <AppText style={styles.title}>{collection.title}</AppText>
+                  <AppText style={styles.date}>{formatDate(collection.date)}</AppText>
                 </View>
                 <View style={styles.amountRow}>
-                  <Text style={styles.label}>على كل شقة</Text>
+                  <AppText style={styles.label}>على كل شقة</AppText>
                   <MoneyText amount={collection.amountPerApartment} size={theme.typography.section} />
                 </View>
                 <View style={styles.amountRow}>
-                  <Text style={styles.label}>تم جمعه / المطلوب</Text>
-                  <Text style={styles.totals}>
+                  <AppText style={styles.label}>تم جمعه / المطلوب</AppText>
+                  <AppText style={styles.totals}>
                     {collection.totalCollected.toLocaleString('en-US')} / {collection.totalTarget.toLocaleString('en-US')} ج
-                  </Text>
+                  </AppText>
                 </View>
                 <View
                   accessibilityRole="progressbar"
@@ -206,9 +202,9 @@ export default function SpecialsScreen() {
                   style={styles.progressTrack}>
                   <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
                 </View>
-                <Text style={styles.progressLabel}>
+                <AppText style={styles.progressLabel}>
                   {collection.totalTarget > 0 ? `${Math.round(progress * 100)}٪ تم تحصيله` : 'لا توجد شقق نشطة'}
-                </Text>
+                </AppText>
               </Pressable>
               <View style={styles.cardFooter}>
                 {collection.active === 1 ? <Pressable
@@ -217,8 +213,8 @@ export default function SpecialsScreen() {
                     setPendingClose(collection);
                   }}
                   style={styles.closeButton}>
-                  <Text style={styles.closeText}>إغلاق التحصيل</Text>
-                </Pressable> : <Text style={styles.closedText}>مغلق</Text>}
+                  <AppText style={styles.closeText}>إغلاق التحصيل</AppText>
+                </Pressable> : <AppText style={styles.closedText}>مغلق</AppText>}
               </View>
             </Card>
           );
@@ -234,7 +230,7 @@ export default function SpecialsScreen() {
         <FormField label="المبلغ لكل شقة" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="مثال: 500" />
         <FormField label="التاريخ" value={date} onChangeText={setDate} placeholder="مثال: 2026-01-31" />
         <FormField label="ملاحظة (اختياري)" value={note} onChangeText={setNote} />
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? <AppText style={styles.error}>{error}</AppText> : null}
         <BigButton title="إنشاء التحصيل" loading={saving} onPress={() => void create()} />
         <BigButton
           title="إلغاء"
@@ -284,7 +280,7 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontSize: theme.typography.section,
     fontFamily: theme.typography.extraBold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   date: {
     color: theme.colors.secondaryText,
@@ -304,7 +300,7 @@ const styles = StyleSheet.create({
   filterOptionSelected: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
   filterText: { color: theme.colors.text, fontSize: theme.typography.small, fontFamily: theme.typography.bold },
   filterTextSelected: { color: theme.colors.onPrimary },
-  closedText: { color: theme.colors.secondaryText, fontSize: theme.typography.small, textAlign: 'right' },
+  closedText: { color: theme.colors.secondaryText, fontSize: theme.typography.small, textAlign: 'auto' },
   cardFooter: { alignItems: 'flex-start' },
   amountRow: {
     flexDirection: 'row',
@@ -335,7 +331,7 @@ const styles = StyleSheet.create({
   progressLabel: {
     color: theme.colors.secondaryText,
     fontSize: theme.typography.body,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   closeButton: {
     minHeight: theme.sizes.touchCompact,
@@ -355,12 +351,12 @@ const styles = StyleSheet.create({
   error: {
     color: theme.colors.danger,
     fontSize: theme.typography.body,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
   success: {
     color: theme.colors.success,
     fontSize: theme.typography.body,
     fontFamily: theme.typography.bold,
-    textAlign: 'right',
+    textAlign: 'auto',
   },
 });

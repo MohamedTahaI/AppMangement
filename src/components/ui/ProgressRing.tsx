@@ -1,5 +1,6 @@
+import { AppText } from '@/components/ui/AppText';
 import { useEffect } from 'react';
-import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { StyleSheet, View, type ViewStyle } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import Animated, { useAnimatedProps, useSharedValue, withTiming } from 'react-native-reanimated';
 
@@ -68,7 +69,7 @@ export function ProgressRing({
           origin={`${size / 2}, ${size / 2}`}
         />
       </Svg>
-      <Text style={styles.label}>{label ?? `${Math.round(progress)}٪`}</Text>
+      <AppText style={styles.label}>{label ?? `${Math.round(progress)}٪`}</AppText>
     </View>
   );
 }

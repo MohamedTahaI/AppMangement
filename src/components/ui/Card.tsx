@@ -12,12 +12,12 @@ export function Card({ variant = 'row', style, ...props }: CardProps) {
 
 const styles = StyleSheet.create({
   card: {
-    padding: theme.spacingScale.sm,
+    padding: theme.spacingScale.card,
     borderRadius: theme.radii.md,
     backgroundColor: theme.colors.surface,
     borderWidth: theme.borderWidths.hairline,
     borderColor: theme.colors.border,
-    gap: theme.spacingScale.xs,
+    gap: theme.spacingScale.cardGap,
   },
   surface: { ...theme.shadows.card },
 });

@@ -1,10 +1,12 @@
+import { AppText } from '@/components/ui/AppText';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useMemo, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppBottomSheet } from './AppBottomSheet';
 import { FormField } from './FormField';
-import { MonthPicker } from './MonthPicker';
+import { BigButton } from './BigButton';
+import { MonthPicker, getCurrentMonth } from './MonthPicker';
 import { theme } from '@/theme';
 
 export type FilterStatus = 'all' | 'paid' | 'partial' | 'unpaid';
@@ -29,6 +31,8 @@ export interface FilterBarProps {
   sort?: string;
   sortOptions?: FilterSortOption[];
   onSortChange?: (sort: string) => void;
+  defaultSort?: string;
+  mainFilters?: ReactNode;
   resultCount: number;
   totalCount: number;
   totalAmount: number;
@@ -59,6 +63,8 @@ export function FilterBar({
   sort,
   sortOptions = [],
   onSortChange,
+  defaultSort,
+  mainFilters,
   resultCount,
   totalCount,
   totalAmount,
@@ -66,13 +72,18 @@ export function FilterBar({
   extraFilterCount = 0,
   onClear,
 }: FilterBarProps) {
-  const [sortVisible, setSortVisible] = useState(false);
-  const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const [moreVisible, setMoreVisible] = useState(false);
+  const initialSort = defaultSort ?? sortOptions[0]?.value;
+  const hasMoreFilters = Boolean(
+    (month && onMonthChange) || onDateRangeChange || extraFilters || (onSortChange && sortOptions.length > 0),
+  );
   const activeCount = useMemo(
     () => Number(Boolean(search.trim())) + Number(Boolean(status && status !== 'all'))
       + extraFilterCount
-      + Number(Boolean(fromDate || toDate)),
-    [extraFilterCount, fromDate, search, status, toDate],
+      + Number(Boolean(fromDate || toDate))
+      + Number(Boolean(month && onMonthChange && month !== getCurrentMonth()))
+      + Number(Boolean(sort && initialSort && sort !== initialSort)),
+    [extraFilterCount, fromDate, initialSort, month, onMonthChange, search, sort, status, toDate],
   );
 
   return (
@@ -96,76 +107,81 @@ export function FilterBar({
                 accessibilityState={{ selected }}
                 onPress={() => onStatusChange(item.value)}
                 style={[styles.chip, selected && styles.chipSelected]}>
-                <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{item.label}</Text>
+                <AppText style={[styles.chipText, selected && styles.chipTextSelected]}>{item.label}</AppText>
               </Pressable>
             );
           })}
         </ScrollView>
       ) : null}
-      {month && onMonthChange ? <MonthPicker month={month} onChange={onMonthChange} /> : null}
-      {onDateRangeChange ? (
-        <>
-          <Pressable style={styles.expandButton} onPress={() => setFiltersExpanded((value) => !value)}>
-            <MaterialIcons name={filtersExpanded ? 'expand-less' : 'expand-more'} size={24} color={theme.colors.primary} />
-            <Text style={styles.actionLabel}>تصفية بالتاريخ</Text>
-            {activeCount > 0 ? <Text style={styles.badge}>{activeCount}</Text> : null}
-          </Pressable>
-          {filtersExpanded ? (
-            <View style={styles.dateRange}>
-              <FormField
-                label="من تاريخ"
-                value={fromDate ?? ''}
-                onChangeText={(value) => onDateRangeChange(value, toDate ?? '')}
-                placeholder="سنة-شهر-يوم"
-              />
-              <FormField
-                label="إلى تاريخ"
-                value={toDate ?? ''}
-                onChangeText={(value) => onDateRangeChange(fromDate ?? '', value)}
-                placeholder="سنة-شهر-يوم"
-              />
-            </View>
-          ) : null}
-        </>
+      {mainFilters}
+      {hasMoreFilters ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`فلاتر أكثر${activeCount > 0 ? `، ${activeCount} فلاتر نشطة` : ''}`}
+          onPress={() => setMoreVisible(true)}
+          style={styles.moreButton}>
+          <MaterialIcons name="tune" size={theme.sizes.icon} color={theme.colors.primary} />
+          <AppText style={styles.actionLabel}>فلاتر أكثر</AppText>
+          {activeCount > 0 ? <AppText style={styles.badge}>{activeCount}</AppText> : null}
+        </Pressable>
       ) : null}
-      {extraFilters}
-      <View style={styles.actions}>
-        {onSortChange && sortOptions.length > 0 ? (
-          <Pressable style={styles.actionButton} onPress={() => setSortVisible(true)}>
-            <MaterialIcons name="sort" size={22} color={theme.colors.primary} />
-            <Text style={styles.actionLabel}>
-              {sortOptions.find((option) => option.value === sort)?.label ?? 'ترتيب'}
-            </Text>
-          </Pressable>
-        ) : null}
-        {activeCount > 0 ? (
-          <Pressable style={styles.actionButton} onPress={onClear}>
-            <MaterialIcons name="filter-alt-off" size={21} color={theme.colors.danger} />
-            <Text style={[styles.actionLabel, styles.clearLabel]}>مسح الفلاتر</Text>
-          </Pressable>
-        ) : null}
-      </View>
-      <Text style={styles.summary}>
+      <AppText style={styles.summary}>
         عرض {resultCount} من {totalCount} — المجموع {totalAmount.toLocaleString('en-US', { maximumFractionDigits: 2 })} ج
-      </Text>
+      </AppText>
       <AppBottomSheet
-        visible={sortVisible}
-        title="ترتيب النتائج"
-        snapPoints={['42%']}
-        onClose={() => setSortVisible(false)}>
-        {sortOptions.map((option) => (
-          <Pressable
-            key={option.value}
-            accessibilityRole="button"
-            accessibilityState={{ selected: option.value === sort }}
-            onPress={() => {
-              onSortChange?.(option.value);
-              setSortVisible(false);
-            }}
-            style={[styles.sortOption, option.value === sort && styles.sortSelected]}>
-            <Text style={[styles.sortText, option.value === sort && styles.sortTextSelected]}>{option.label}</Text>
-          </Pressable>
-        ))}
+        visible={moreVisible}
+        title="فلاتر أكثر"
+        onClose={() => setMoreVisible(false)}>
+        {month && onMonthChange ? (
+          <View style={styles.filterGroup}>
+            <AppText style={styles.groupTitle}>الشهر</AppText>
+            <MonthPicker month={month} onChange={onMonthChange} />
+          </View>
+        ) : null}
+        {onDateRangeChange ? (
+          <View style={styles.dateRange}>
+            <AppText style={styles.groupTitle}>الفترة الزمنية</AppText>
+            <FormField
+              label="من تاريخ"
+              value={fromDate ?? ''}
+              onChangeText={(value) => onDateRangeChange(value, toDate ?? '')}
+              placeholder="سنة-شهر-يوم"
+            />
+            <FormField
+              label="إلى تاريخ"
+              value={toDate ?? ''}
+              onChangeText={(value) => onDateRangeChange(fromDate ?? '', value)}
+              placeholder="سنة-شهر-يوم"
+            />
+          </View>
+        ) : null}
+        {onSortChange && sortOptions.length > 0 ? (
+          <View style={styles.filterGroup}>
+            <AppText style={styles.groupTitle}>الترتيب</AppText>
+            {sortOptions.map((option) => (
+              <Pressable
+                key={option.value}
+                accessibilityRole="button"
+                accessibilityState={{ selected: option.value === sort }}
+                onPress={() => onSortChange(option.value)}
+                style={[styles.sortOption, option.value === sort && styles.sortSelected]}>
+                <AppText style={[styles.sortText, option.value === sort && styles.sortTextSelected]}>
+                  {option.label}
+                </AppText>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+        {extraFilters}
+        <BigButton title="تطبيق" onPress={() => setMoreVisible(false)} />
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            onClear();
+            setMoreVisible(false);
+          }}>
+          <AppText style={styles.clearLink}>مسح الكل</AppText>
+        </Pressable>
       </AppBottomSheet>
     </View>
   );
@@ -188,7 +204,9 @@ const styles = StyleSheet.create({
   chipSelected: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
   chipText: { color: theme.colors.text, fontSize: theme.typography.small, fontFamily: theme.typography.bold },
   chipTextSelected: { color: theme.colors.onPrimary },
-  expandButton: { minHeight: theme.sizes.touch, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: theme.spacingScale.xs },
+  moreButton: { minHeight: theme.sizes.touch, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: theme.spacingScale.xs, paddingHorizontal: theme.spacingScale.xs, borderRadius: theme.radii.sm, backgroundColor: theme.colors.successBackground },
+  filterGroup: { gap: theme.spacingScale.xs },
+  groupTitle: { width: '100%', color: theme.colors.text, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'auto', writingDirection: 'rtl' },
   badge: {
     minWidth: theme.sizes.smallBadgeWidth,
     paddingHorizontal: theme.spacingScale.xs,
@@ -201,11 +219,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   dateRange: { gap: theme.spacingScale.sm },
-  actions: { flexDirection: 'row', gap: theme.spacingScale.sm, alignItems: 'center' },
-  actionButton: { minHeight: theme.sizes.touch, flexDirection: 'row', alignItems: 'center', gap: theme.spacingScale.xs },
   actionLabel: { color: theme.colors.primary, fontSize: theme.typography.small, fontFamily: theme.typography.bold },
-  clearLabel: { color: theme.colors.danger },
-  summary: { color: theme.colors.secondaryText, fontSize: theme.typography.small, fontFamily: theme.typography.medium, textAlign: 'right' },
+  clearLink: { color: theme.colors.danger, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'center', textDecorationLine: 'underline' },
+  summary: { color: theme.colors.secondaryText, fontSize: theme.typography.small, fontFamily: theme.typography.medium, textAlign: 'auto' },
   sortOption: {
     minHeight: theme.sizes.touchCompact + theme.spacingScale.xs / 2,
     paddingHorizontal: theme.spacingScale.sm,
@@ -214,6 +230,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
   },
   sortSelected: { backgroundColor: theme.colors.paidBackground },
-  sortText: { color: theme.colors.text, fontSize: theme.typography.body, fontFamily: theme.typography.medium, textAlign: 'right' },
+  sortText: { color: theme.colors.text, fontSize: theme.typography.body, fontFamily: theme.typography.medium, textAlign: 'auto' },
   sortTextSelected: { color: theme.colors.primary, fontFamily: theme.typography.bold },
 });

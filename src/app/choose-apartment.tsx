@@ -1,6 +1,7 @@
+import { AppText } from '@/components/ui/AppText';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 
 import { listApartments, type Apartment } from '@/db/apartments';
 import { Card } from '@/components/ui/Card';
@@ -51,7 +52,7 @@ export default function ChooseApartmentScreen() {
         <View style={styles.header}>
           <ScreenHeader title="اختر الشقة" subtitle="حدد الشقة لتسجيل دفعة" />
           <FormField label="بحث" value={search} onChangeText={setSearch} placeholder="رقم الشقة أو اسم المالك" />
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {error ? <AppText style={styles.error}>{error}</AppText> : null}
           {loading ? <><Skeleton /><Skeleton /></> : null}
         </View>
       }
@@ -61,8 +62,8 @@ export default function ChooseApartmentScreen() {
           accessibilityRole="button"
           onPress={() => router.push({ pathname: '/payment', params: { apartmentId: String(item.id) } })}>
           <Card style={styles.row}>
-            <Text style={styles.number}>شقة {item.number}</Text>
-            <Text style={styles.owner}>{item.owner_name || 'اسم المالك غير مسجل'}</Text>
+            <AppText style={styles.number}>شقة {item.number}</AppText>
+            <AppText style={styles.owner}>{item.owner_name || 'اسم المالك غير مسجل'}</AppText>
           </Card>
         </Pressable>
       )}
@@ -75,7 +76,7 @@ const styles = StyleSheet.create({
   content: { flexGrow: 1, padding: theme.spacingScale.screen, gap: theme.spacingScale.xs, paddingBottom: theme.spacingScale.lg },
   header: { gap: theme.spacingScale.xs, marginBottom: theme.spacingScale.xs },
   row: { minHeight: theme.sizes.rowLarge, justifyContent: 'center' },
-  number: { color: theme.colors.text, fontSize: theme.typography.section, fontFamily: theme.typography.bold, textAlign: 'right' },
-  owner: { color: theme.colors.secondaryText, fontSize: theme.typography.body, fontFamily: theme.typography.fontFamily, textAlign: 'right' },
-  error: { color: theme.colors.danger, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'right' },
+  number: { color: theme.colors.text, fontSize: theme.typography.section, fontFamily: theme.typography.bold, textAlign: 'auto' },
+  owner: { color: theme.colors.secondaryText, fontSize: theme.typography.body, fontFamily: theme.typography.fontFamily, textAlign: 'auto' },
+  error: { color: theme.colors.danger, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'auto' },
 });

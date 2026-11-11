@@ -1,6 +1,13 @@
+interface SafeMessageError extends Error {
+  safeMessage?: boolean;
+}
+
 export function arabicErrorMessage(error: unknown, fallback: string): string {
   if (__DEV__) console.log(fallback, error);
   if (!(error instanceof Error)) return fallback;
+
+  // Messages built on purpose (they may contain technical hints like /exec).
+  if ((error as SafeMessageError).safeMessage === true) return error.message;
 
   if (/unique constraint/i.test(error.message)) {
     return 'هذه البيانات مسجلة من قبل.';

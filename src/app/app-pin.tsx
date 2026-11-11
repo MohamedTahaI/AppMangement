@@ -1,12 +1,13 @@
 import { AppText } from '@/components/ui/AppText';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 
 import { BigButton } from '@/components/ui/BigButton';
 import { BackButton } from '@/components/ui/BackButton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FormField } from '@/components/ui/FormField';
+import { Screen } from '@/components/ui/Screen';
 import { ScreenTitle } from '@/components/ui/ScreenTitle';
 import { theme } from '@/components/ui/theme';
 import { disableAppPin, isAppPinEnabled, setAppPin, verifyAppPin } from '@/services/appPin';
@@ -98,7 +99,7 @@ export default function AppPinScreen() {
 
   return (
     <>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <Screen>
         <BackButton onPress={() => router.back()} label="رجوع" />
         <ScreenTitle title="رمز الدخول" subtitle="اختياري لحماية فتح التطبيق" />
         <AppText style={styles.status}>
@@ -151,7 +152,7 @@ export default function AppPinScreen() {
         <AppText style={styles.help}>لا تحفظ الشفرة نفسها؛ يُحفظ رمز مشفّر فقط. اختر رقماً يسهل تذكره.</AppText>
         {error ? <AppText style={styles.error}>{error}</AppText> : null}
         {notice ? <AppText style={styles.notice}>{notice}</AppText> : null}
-      </ScrollView>
+      </Screen>
 
       <ConfirmDialog
         visible={confirmDisable}
@@ -167,25 +168,6 @@ export default function AppPinScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    padding: theme.spacingScale.screen,
-    paddingTop: theme.spacingScale.md,
-    paddingBottom: theme.spacingScale.lg,
-    gap: theme.spacingScale.sm,
-    backgroundColor: theme.colors.background,
-    writingDirection: 'rtl',
-  },
-  back: {
-    alignSelf: 'flex-start',
-    minHeight: theme.sizes.touchCompact,
-    justifyContent: 'center',
-  },
-  backText: {
-    color: theme.colors.primary,
-    fontSize: theme.typography.body,
-    fontFamily: theme.typography.bold,
-  },
   status: {
     color: theme.colors.text,
     fontSize: theme.typography.section,

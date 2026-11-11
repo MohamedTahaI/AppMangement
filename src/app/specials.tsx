@@ -1,7 +1,7 @@
 import { AppText } from '@/components/ui/AppText';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { createSpecialCollection } from '@/services/billing';
 import {
@@ -18,6 +18,7 @@ import { FormField } from '@/components/ui/FormField';
 import { FilterBar } from '@/components/ui/FilterBar';
 import { getCurrentMonth } from '@/components/ui/MonthPicker';
 import { MoneyText } from '@/components/ui/MoneyText';
+import { Screen } from '@/components/ui/Screen';
 import { ScreenTitle } from '@/components/ui/ScreenTitle';
 import { formatDate } from '@/utils/format';
 import { theme } from '@/components/ui/theme';
@@ -125,9 +126,8 @@ export default function SpecialsScreen() {
   };
 
   return (
-    <>
-      <ScrollView contentContainerStyle={styles.container}>
-        <BackButton onPress={() => router.back()} label="رجوع للتحصيل الشهري" />
+    <Screen>
+      <BackButton onPress={() => router.back()} label="رجوع للتحصيل الشهري" />
         <ScreenTitle title="تحصيلات خاصة" subtitle="مثل صيانة المصعد أو إصلاحات العمارة" />
         <BigButton title="تحصيل جديد" onPress={() => setCreateVisible(true)} />
         <FilterBar
@@ -219,7 +219,6 @@ export default function SpecialsScreen() {
             </Card>
           );
         })}
-      </ScrollView>
 
       <AppBottomSheet
         visible={createVisible}
@@ -248,20 +247,11 @@ export default function SpecialsScreen() {
         onConfirm={() => void closeCollection()}
         onCancel={() => setPendingClose(null)}
       />
-    </>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    padding: theme.spacingScale.screen,
-    paddingTop: theme.spacingScale.md,
-    paddingBottom: theme.spacingScale.lg,
-    gap: theme.spacingScale.sm,
-    backgroundColor: theme.colors.background,
-    writingDirection: 'rtl',
-  },
   back: {
     minHeight: theme.sizes.touchCompact,
     alignSelf: 'flex-start',

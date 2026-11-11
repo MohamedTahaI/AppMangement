@@ -12,6 +12,7 @@ import { FilterBar, type FilterStatus } from '@/components/ui/FilterBar';
 import { getCurrentMonth, getMonthLabel } from '@/components/ui/MonthPicker';
 import { MonthTransition } from '@/components/ui/MonthTransition';
 import { MoneyText } from '@/components/ui/MoneyText';
+import { Screen } from '@/components/ui/Screen';
 import { ScreenTitle } from '@/components/ui/ScreenTitle';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -76,7 +77,7 @@ export default function OverdueScreen() {
       : b.remaining - a.remaining);
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <Screen>
       <BackButton onPress={() => router.back()} label="رجوع" />
       <ScreenTitle title="المتأخرين" subtitle="الشقق التي عليها مبالغ متبقية" />
       <SegmentedControl<Mode>
@@ -230,20 +231,11 @@ export default function OverdueScreen() {
         </Card>
       )) : null}
       </MonthTransition> : null}
-    </ScrollView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    padding: theme.spacingScale.screen,
-    paddingTop: theme.spacingScale.md,
-    paddingBottom: theme.spacingScale.lg,
-    gap: theme.spacingScale.sm,
-    backgroundColor: theme.colors.background,
-    writingDirection: 'rtl',
-  },
   back: {
     minHeight: theme.sizes.touchCompact,
     alignSelf: 'flex-start',

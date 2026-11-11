@@ -1,14 +1,16 @@
 import { AppText } from '@/components/ui/AppText';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { listApartmentPayments, type ApartmentPayment } from '@/db/payments';
 import { listApartments, type Apartment } from '@/db/apartments';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { BigButton } from '@/components/ui/BigButton';
+import { Screen } from '@/components/ui/Screen';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
+import { Section } from '@/components/ui/Section';
 import { formatDate } from '@/utils/format';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { StatusChip } from '@/components/ui/StatusChip';
@@ -70,7 +72,7 @@ export default function ApartmentAccountScreen() {
       : collections.find((item) => item.title === payment.special_title)?.title ?? payment.special_title ?? 'تحصيل خاص';
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <Screen>
       <ScreenHeader
         title={apartment ? `حساب شقة ${apartment.number}` : 'حساب الشقة'}
         subtitle={apartment?.owner_name || 'اسم المالك غير مسجل'}
@@ -110,36 +112,37 @@ export default function ApartmentAccountScreen() {
               ))}
             </View>
           </Card>
-          <AppText style={styles.section}>التحصيلات الخاصة</AppText>
-          {specialCharges.length === 0 ? <EmptyState message="لا توجد تحصيلات خاصة على هذه الشقة." /> : null}
-          {specialCharges.map((charge) => (
-            <Card key={charge.chargeId} style={styles.specialRow}>
-              <View style={styles.specialInfo}>
-                <AppText style={styles.itemTitle}>{charge.title}</AppText>
-                <StatusChip status={charge.status} />
-              </View>
-              <MoneyText amount={charge.remaining} size={theme.typography.section} />
-            </Card>
-          ))}
-          <AppText style={styles.section}>سجل الدفعات</AppText>
-          {history.length === 0 ? <EmptyState message="لا توجد دفعات مسجلة." /> : null}
-          {history.map((payment) => (
-            <Card key={payment.id} style={styles.historyRow}>
-              <View>
-                <AppText style={styles.itemTitle}>{collectionTitle(payment)}</AppText>
-                <AppText style={styles.meta}>{formatDate(payment.paid_date)}{payment.note ? ` · ${payment.note}` : ''}</AppText>
-              </View>
-              <MoneyText amount={payment.amount} size={theme.typography.section} />
-            </Card>
-          ))}
+          <Section title="التحصيلات الخاصة">
+            {specialCharges.length === 0 ? <EmptyState message="لا توجد تحصيلات خاصة على هذه الشقة." /> : null}
+            {specialCharges.map((charge) => (
+              <Card key={charge.chargeId} style={styles.specialRow}>
+                <View style={styles.specialInfo}>
+                  <AppText style={styles.itemTitle}>{charge.title}</AppText>
+                  <StatusChip status={charge.status} />
+                </View>
+                <MoneyText amount={charge.remaining} size={theme.typography.section} />
+              </Card>
+            ))}
+          </Section>
+          <Section title="سجل الدفعات">
+            {history.length === 0 ? <EmptyState message="لا توجد دفعات مسجلة." /> : null}
+            {history.map((payment) => (
+              <Card key={payment.id} style={styles.historyRow}>
+                <View>
+                  <AppText style={styles.itemTitle}>{collectionTitle(payment)}</AppText>
+                  <AppText style={styles.meta}>{formatDate(payment.paid_date)}{payment.note ? ` · ${payment.note}` : ''}</AppText>
+                </View>
+                <MoneyText amount={payment.amount} size={theme.typography.section} />
+              </Card>
+            ))}
+          </Section>
         </>
       ) : null}
-    </ScrollView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flexGrow: 1, padding: theme.spacingScale.screen, gap: theme.spacingScale.sm, paddingBottom: theme.spacingScale.lg, backgroundColor: theme.colors.background, writingDirection: 'rtl' },
   error: { color: theme.colors.danger, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'auto' },
   yearRow: { minHeight: theme.sizes.touchCompact + theme.spacingScale.xs / 2, flexDirection: 'row', direction: 'rtl', alignItems: 'center', justifyContent: 'space-between' },
   year: { color: theme.colors.text, fontSize: theme.typography.heading, fontFamily: theme.typography.extraBold },

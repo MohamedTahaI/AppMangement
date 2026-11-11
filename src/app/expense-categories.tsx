@@ -1,7 +1,7 @@
 import { AppText } from '@/components/ui/AppText';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { Pressable, StyleSheet, Switch, View } from 'react-native';
 
 import {
   addExpenseCategory,
@@ -17,6 +17,7 @@ import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FormField } from '@/components/ui/FormField';
+import { Screen } from '@/components/ui/Screen';
 import { ScreenTitle } from '@/components/ui/ScreenTitle';
 import { theme } from '@/components/ui/theme';
 import { arabicErrorMessage } from '@/services/errors';
@@ -105,7 +106,7 @@ export default function ExpenseCategoriesScreen() {
 
   return (
     <>
-      <ScrollView contentContainerStyle={styles.container}>
+      <Screen>
         <BackButton onPress={() => router.back()} label="رجوع" />
         <ScreenTitle title="أنواع المصروفات" subtitle="إضافة الأنواع أو تعديلها أو إخفاؤها" />
         <BigButton title="إضافة نوع مصروف" onPress={openNew} />
@@ -128,7 +129,7 @@ export default function ExpenseCategoriesScreen() {
             </View>
           </Card>
         ))}
-      </ScrollView>
+      </Screen>
 
       <AppBottomSheet
         visible={editorVisible}
@@ -177,14 +178,6 @@ export default function ExpenseCategoriesScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    padding: theme.spacingScale.screen,
-    paddingTop: theme.spacingScale.md,
-    gap: theme.spacingScale.sm,
-    backgroundColor: theme.colors.background,
-    writingDirection: 'rtl',
-  },
   back: {
     alignSelf: 'flex-start',
     minHeight: theme.sizes.touchCompact,

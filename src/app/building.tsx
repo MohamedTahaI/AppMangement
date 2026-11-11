@@ -1,7 +1,7 @@
 import { AppText } from '@/components/ui/AppText';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 
 import { getSetting, setSetting } from '@/db/settings';
 import { BigButton } from '@/components/ui/BigButton';
@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FormField } from '@/components/ui/FormField';
 import { MonthPicker, getCurrentMonth, getMonthLabel } from '@/components/ui/MonthPicker';
+import { Screen } from '@/components/ui/Screen';
 import { ScreenTitle } from '@/components/ui/ScreenTitle';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { SuccessSheet } from '@/components/ui/SuccessSheet';
@@ -87,7 +88,7 @@ export default function BuildingScreen() {
 
   return (
     <>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <Screen>
         <BackButton onPress={() => router.back()} label="رجوع" />
         <ScreenTitle title="بيانات العمارة" subtitle="اسم العمارة وبداية تسجيل الاشتراكات" />
         {loading ? (
@@ -113,7 +114,7 @@ export default function BuildingScreen() {
           onPress={() => setEditorVisible(true)}
           disabled={loading || saving}
         />
-      </ScrollView>
+      </Screen>
       <AppBottomSheet
         visible={editorVisible}
         title="تعديل بيانات العمارة"
@@ -159,24 +160,6 @@ export default function BuildingScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    padding: theme.spacingScale.screen,
-    paddingTop: theme.spacingScale.md,
-    gap: theme.spacingScale.sm,
-    backgroundColor: theme.colors.background,
-    writingDirection: 'rtl',
-  },
-  back: {
-    alignSelf: 'flex-start',
-    minHeight: theme.sizes.touchCompact,
-    justifyContent: 'center',
-  },
-  backText: {
-    color: theme.colors.primary,
-    fontSize: theme.typography.body,
-    fontFamily: theme.typography.bold,
-  },
   label: {
     color: theme.colors.text,
     fontSize: theme.typography.body,

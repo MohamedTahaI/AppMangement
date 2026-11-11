@@ -1,7 +1,7 @@
 import { AppText } from '@/components/ui/AppText';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { getSetting } from '@/db/settings';
 import { getDatabase, markDirty } from '@/db/schema';
@@ -10,14 +10,18 @@ import { BackButton } from '@/components/ui/BackButton';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FormField } from '@/components/ui/FormField';
+import { Screen } from '@/components/ui/Screen';
 import { ScreenTitle } from '@/components/ui/ScreenTitle';
 import { Toast } from '@/components/ui/Toast';
 import { theme } from '@/components/ui/theme';
 import { arabicErrorMessage } from '@/services/errors';
-import { SHEET_SCHEMA_VERSION } from '@/services/reportTables';
+import { checkSheetUrl } from '@/services/sheetUrl';
 import {
   getSyncStatus,
+  pingMessage,
   pingSheet,
+  SheetError,
+  sheetErrorDetails,
   subscribeToSyncStatus,
   syncNow,
   type SyncStatus,
@@ -54,9 +58,23 @@ export default function OnlineSheetScreen() {
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorDetails, setErrorDetails] = useState<string | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [confirmRebuild, setConfirmRebuild] = useState(false);
+
+  const clearError = useCallback(() => {
+    setError(null);
+    setErrorDetails(null);
+    setShowDetails(false);
+  }, []);
+
+  const fail = useCallback((message: string, details: string | null) => {
+    setError(message);
+    setErrorDetails(details);
+    setShowDetails(false);
+  }, []);
 
   const load = useCallback(async () => {
     const [savedUrl, savedSecret, syncStatus] = await Promise.all([
@@ -71,27 +89,29 @@ export default function OnlineSheetScreen() {
 
   useFocusEffect(useCallback(() => {
     void load().catch((loadError: unknown) => {
-      setError(arabicErrorMessage(loadError, 'تعذر تحميل بيانات الاتصال.'));
+      fail(arabicErrorMessage(loadError, 'تعذر تحميل بيانات الاتصال.'), sheetErrorDetails(loadError));
     });
-  }, [load]));
+  }, [load, fail]));
 
   useFocusEffect(useCallback(() => {
     return subscribeToSyncStatus(() => {
       void getSyncStatus().then(setStatus).catch((loadError: unknown) => {
-        setError(arabicErrorMessage(loadError, 'تعذر تحميل حالة التحديث.'));
+        fail(arabicErrorMessage(loadError, 'تعذر تحميل حالة التحديث.'), sheetErrorDetails(loadError));
       });
     });
-  }, []));
+  }, [fail]));
 
   const saveConfiguration = async (): Promise<void> => {
-    const normalizedUrl = url.trim();
     const normalizedSecret = secret.trim();
-    if (!normalizedUrl || !normalizedSecret) {
-      throw new Error('أدخل رابط الجدول والرمز السري.');
+    if (!url.trim() || !normalizedSecret) {
+      throw new SheetError('أدخل رابط الجدول والرمز السري.');
     }
-    if (!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec(?:\?.*)?$/.test(normalizedUrl)) {
-      throw new Error('الرابط يجب أن يكون رابط تطبيق الويب المنشور وينتهي بـ /exec.');
+    const checked = checkSheetUrl(url);
+    if (!checked.ok) {
+      throw new SheetError(checked.error);
     }
+    const normalizedUrl = checked.url;
+    setUrl(normalizedUrl);
     const [savedUrl, savedSecret] = await Promise.all([
       getSetting('sheet_url'),
       getSetting('sheet_secret'),
@@ -120,18 +140,16 @@ export default function OnlineSheetScreen() {
 
   const testConnection = async () => {
     setBusy(true);
-    setError(null);
+    clearError();
     setNotice(null);
     try {
       await saveConfiguration();
       const ping = await pingSheet();
-      const needsFull = !ping.revision || ping.schemaVersion !== SHEET_SCHEMA_VERSION;
-      const result = await syncNow(needsFull ? { full: true } : undefined);
-      const message = result.sent > 0 ? `تم إرسال ${result.sent} تغيير.` : 'نجح الاتصال والجدول محدث.';
+      const message = pingMessage(ping);
       setNotice(message);
       setToastMessage(message);
     } catch (testError) {
-      setError(arabicErrorMessage(testError, 'تعذر اختبار الاتصال.'));
+      fail(arabicErrorMessage(testError, 'تعذر اختبار الاتصال.'), sheetErrorDetails(testError));
     } finally {
       setBusy(false);
       void getSyncStatus().then(setStatus);
@@ -140,7 +158,7 @@ export default function OnlineSheetScreen() {
 
   const updateSheet = async () => {
     setBusy(true);
-    setError(null);
+    clearError();
     setNotice(null);
     try {
       await saveConfiguration();
@@ -149,7 +167,7 @@ export default function OnlineSheetScreen() {
       setNotice(message);
       setToastMessage(message);
     } catch (syncError) {
-      setError(arabicErrorMessage(syncError, 'تعذر تحديث الجدول.'));
+      fail(arabicErrorMessage(syncError, 'تعذر تحديث الجدول.'), sheetErrorDetails(syncError));
     } finally {
       setBusy(false);
       void getSyncStatus().then(setStatus);
@@ -159,14 +177,14 @@ export default function OnlineSheetScreen() {
   const rebuildSheet = async () => {
     setConfirmRebuild(false);
     setBusy(true);
-    setError(null);
+    clearError();
     setNotice(null);
     try {
       await saveConfiguration();
       const result = await syncNow({ full: true });
       setNotice(`تمت إعادة بناء الجدول بالكامل (${result.sent} صف).`);
     } catch (syncError) {
-      setError(arabicErrorMessage(syncError, 'تعذر تحديث الجدول.'));
+      fail(arabicErrorMessage(syncError, 'تعذر تحديث الجدول.'), sheetErrorDetails(syncError));
     } finally {
       setBusy(false);
       void getSyncStatus().then(setStatus);
@@ -184,7 +202,7 @@ export default function OnlineSheetScreen() {
 
   return (
     <>
-      <ScrollView contentContainerStyle={styles.container}>
+      <Screen>
         <BackButton onPress={() => router.back()} label="رجوع" />
         <ScreenTitle title="الجدول الأونلاين" subtitle="نسخة للقراءة فقط على جدول جوجل" />
 
@@ -227,12 +245,15 @@ export default function OnlineSheetScreen() {
           title={busy ? 'جارٍ الاتصال...' : 'حفظ بيانات الاتصال'}
           onPress={() => {
             setBusy(true);
-            setError(null);
+            clearError();
             setNotice(null);
             void saveConfiguration()
               .then(() => setNotice('تم حفظ بيانات الاتصال.'))
               .catch((saveError: unknown) => {
-                setError(arabicErrorMessage(saveError, 'تعذر حفظ بيانات الاتصال.'));
+                fail(
+                  arabicErrorMessage(saveError, 'تعذر حفظ بيانات الاتصال.'),
+                  sheetErrorDetails(saveError),
+                );
               })
               .finally(() => setBusy(false));
           }}
@@ -256,12 +277,30 @@ export default function OnlineSheetScreen() {
           disabled={busy}
         />
 
-        {error ? <AppText style={styles.error}>{error}</AppText> : null}
+        {error ? (
+          <View style={styles.errorBlock}>
+            <AppText style={styles.error}>{error}</AppText>
+            {errorDetails ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setShowDetails((value) => !value)}
+                style={styles.detailsToggle}
+              >
+                <AppText style={styles.detailsLink}>
+                  {showDetails ? 'إخفاء التفاصيل ▲' : 'تفاصيل ▼'}
+                </AppText>
+              </Pressable>
+            ) : null}
+            {errorDetails && showDetails ? (
+              <AppText style={styles.details}>{errorDetails}</AppText>
+            ) : null}
+          </View>
+        ) : null}
         {notice ? <AppText style={styles.notice}>{notice}</AppText> : null}
         <AppText style={styles.help}>
           يُرسل التطبيق نسخة كاملة من البيانات ويعيد كتابة أوراق الجدول. السكان يستطيعون المشاهدة فقط.
         </AppText>
-      </ScrollView>
+      </Screen>
 
       <ConfirmDialog
         visible={confirmRebuild}
@@ -284,15 +323,6 @@ export default function OnlineSheetScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    padding: theme.spacingScale.screen,
-    paddingTop: theme.spacingScale.md,
-    paddingBottom: theme.spacingScale.lg,
-    gap: theme.spacingScale.sm,
-    backgroundColor: theme.colors.background,
-    writingDirection: 'rtl',
-  },
   back: {
     minHeight: theme.sizes.touchCompact,
     alignSelf: 'flex-start',
@@ -341,6 +371,27 @@ const styles = StyleSheet.create({
   error: {
     color: theme.colors.danger,
     fontSize: theme.typography.body,
+    textAlign: 'auto',
+  },
+  errorBlock: {
+    gap: theme.spacingScale.xs,
+  },
+  detailsToggle: {
+    alignSelf: 'flex-start',
+    minHeight: theme.sizes.touchCompact,
+    justifyContent: 'center',
+  },
+  detailsLink: {
+    color: theme.colors.secondaryText,
+    fontSize: theme.typography.small,
+    fontFamily: theme.typography.bold,
+    textAlign: 'auto',
+  },
+  details: {
+    color: theme.colors.secondaryText,
+    fontSize: theme.typography.small,
+    fontFamily: theme.typography.fontFamily,
+    lineHeight: theme.typography.lineHeightBody,
     textAlign: 'auto',
   },
   notice: {

@@ -64,7 +64,7 @@ const GROUPS: { title: string; links: DrawerLink[] }[] = [
   {
     title: 'البيانات',
     links: [
-      { label: 'تصدير التقارير', icon: 'file-download', route: '/export-backup' },
+      { label: 'تصدير التقارير', icon: 'file-download', route: '/export' },
       { label: 'النسخة الاحتياطية', icon: 'backup', route: '/backup' },
       { label: 'الجدول الأونلاين', icon: 'cloud-sync', route: '/sync' },
     ],

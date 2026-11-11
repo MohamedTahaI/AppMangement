@@ -2,6 +2,7 @@ import { AppText } from '@/components/ui/AppText';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   addApartment,
@@ -131,6 +132,7 @@ export default function ApartmentsScreen() {
 
   return (
     <>
+      <SafeAreaView edges={['top', 'bottom']} style={styles.root}>
       <FlatList
         style={styles.list}
         data={loading ? [] : visibleApartments}
@@ -203,6 +205,7 @@ export default function ApartmentsScreen() {
             : row;
         }}
       />
+      </SafeAreaView>
 
       <AppBottomSheet
         visible={editorVisible}
@@ -254,18 +257,16 @@ export default function ApartmentsScreen() {
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: theme.colors.background },
   container: {
     flexGrow: 1,
-    paddingHorizontal: theme.spacingScale.screen,
-    paddingTop: theme.spacingScale.md,
-    paddingBottom: theme.spacingScale.lg,
-    gap: theme.spacingScale.sm,
-    backgroundColor: theme.colors.background,
-    writingDirection: 'rtl',
+    padding: theme.spacingScale.screenPadding,
+    gap: theme.spacingScale.cardGap,
+    paddingBottom: theme.sizes.tabBar + 24,
   },
   list: { flex: 1, backgroundColor: theme.colors.background },
-  listHeader: { gap: theme.spacingScale.sm, marginBottom: theme.spacingScale.sm },
-  skeletonList: { gap: theme.spacingScale.sm },
+  listHeader: { gap: theme.spacingScale.cardGap },
+  skeletonList: { gap: theme.spacingScale.cardGap },
   back: {
     alignSelf: 'flex-start',
     minHeight: theme.sizes.touchCompact,

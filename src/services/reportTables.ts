@@ -18,7 +18,7 @@ export interface ReportTable {
   hasFilter: boolean;
 }
 
-export const SHEET_SCHEMA_VERSION = 3;
+export const SHEET_SCHEMA_VERSION = 4;
 
 export const REPORT_TABLE_KEYS = [
   'summary',
@@ -101,6 +101,7 @@ export function buildReportTables(report: ReportData): ReportTable[] {
       rows: [
         row('summary:building', ['اسم العمارة', report.buildingName]),
         row('summary:period', ['الفترة', report.periodLabel]),
+        row('summary:generatedAt', ['تاريخ إنشاء التقرير', report.generatedAt.slice(0, 10)]),
         row('summary:collected', ['إجمالي التحصيل', report.summary.collected]),
         row('summary:special', ['تحصيلات خاصة', report.summary.specialCollected]),
         row('summary:adjustments', ['تعديلات الرصيد', report.summary.adjustments]),
@@ -110,7 +111,10 @@ export function buildReportTables(report: ReportData): ReportTable[] {
           'الشقق التي دفعت',
           `${report.summary.paidApartments} من ${report.summary.totalApartments}`,
         ]),
-        row('summary:generatedAt', ['تاريخ إنشاء التقرير', report.generatedAt.slice(0, 10)]),
+        row('summary:paymentsCount', ['عدد الدفعات', report.payments.length]),
+        row('summary:expensesCount', ['عدد المصروفات', report.expenses.length]),
+        row('summary:specialsCount', ['عدد التحصيلات الخاصة', report.specialCollections.length]),
+        row('summary:unpaidCount', ['الشقق المتأخرة', report.unpaid.length]),
       ],
     },
     {
@@ -144,7 +148,7 @@ export function buildReportTables(report: ReportData): ReportTable[] {
         'إجمالي المتبقي',
       ],
       moneyColumns: [...Array.from({ length: 14 }, (_, index) => index + 3)],
-      totalColumns: [],
+      totalColumns: [...Array.from({ length: 14 }, (_, index) => index + 3)],
       hasFilter: false,
       rows: monthRows,
     },
@@ -252,7 +256,7 @@ export function buildReportTables(report: ReportData): ReportTable[] {
       name: REPORT_TABLE_NAMES.adjustments,
       headers: ['التاريخ', 'النوع', 'المبلغ', 'السبب', 'الحالة', 'سبب الإلغاء'],
       moneyColumns: [2],
-      totalColumns: [],
+      totalColumns: [2],
       hasFilter: false,
       rows: report.adjustments.map((adjustment) =>
         row(`adjustment:${adjustment.id}`, [

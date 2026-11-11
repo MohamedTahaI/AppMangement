@@ -116,10 +116,10 @@ export default function MonthStatementScreen() {
         {!loading ? (
           <>
             <View style={styles.summaryGrid}>
-              <StatCard title="التحصيل" amount={totals.monthCollected} icon="payments" amountSize={28} labelSize={15} />
-              <StatCard title="المصروفات" amount={totals.monthExpenses} icon="receipt-long" amountSize={28} labelSize={15} />
-              <StatCard title="الصافي" amount={net} icon="trending-up" amountSize={28} labelSize={15} />
-              <StatCard title="الشقق المدفوعة" value={`${paidApartments} من ${apartments.length}`} icon="check-circle" amountSize={28} labelSize={15} />
+              <StatCard title="التحصيل" amount={totals.monthCollected} icon="payments" amountSize={28} labelSize={15} style={styles.gridCard} />
+              <StatCard title="المصروفات" amount={totals.monthExpenses} icon="receipt-long" amountSize={28} labelSize={15} style={styles.gridCard} />
+              <StatCard title="الصافي" amount={net} icon="trending-up" amountSize={28} labelSize={15} style={styles.gridCard} />
+              <StatCard title="الشقق المدفوعة" value={`${paidApartments} من ${apartments.length}`} icon="check-circle" amountSize={28} labelSize={15} style={styles.gridCard} />
             </View>
             <Card variant="surface" style={styles.adjustmentsCard}>
               <AppText style={styles.adjustmentsLabel}>تعديلات الرصيد</AppText>
@@ -190,6 +190,7 @@ export default function MonthStatementScreen() {
 const styles = StyleSheet.create({
   error: { color: theme.colors.danger, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'auto' },
   summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacingScale.cardGap },
+  gridCard: { width: theme.sizes.summaryCardWidth, minHeight: theme.sizes.statCard },
   adjustmentsCard: { flexDirection: 'row', direction: 'rtl', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacingScale.xs },
   adjustmentsLabel: { color: theme.colors.text, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'auto' },
   specialRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacingScale.xs },

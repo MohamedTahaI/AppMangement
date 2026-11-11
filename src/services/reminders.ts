@@ -52,20 +52,29 @@ async function cancelBackupReminders(): Promise<void> {
   await Promise.all(reminders.map((item) => Notifications.cancelScheduledNotificationAsync(item.identifier)));
 }
 
-function reminderDate(daysFromNow: number): Date {
-  const date = new Date();
-  date.setDate(date.getDate() + daysFromNow);
+function addDaysAtHour(base: Date, days: number): Date {
+  const date = new Date(base);
+  date.setDate(date.getDate() + days);
   date.setHours(DEFAULT_HOUR, 0, 0, 0);
   return date;
 }
 
-function daysFrom(lastBackupAt: string | null): number[] {
-  if (!lastBackupAt) return [1, 8, 15, 22];
-  const last = new Date(lastBackupAt);
-  if (Number.isNaN(last.getTime())) return [1, 8, 15, 22];
-  const week = 7 * 24 * 60 * 60 * 1000;
-  const stale = Date.now() - last.getTime() > week;
-  return stale ? [1, 8, 15, 22] : [7, 14, 21, 28];
+/**
+ * Four one-time reminders at 10:00: last backup + 7, 14, 21 and 28 days.
+ * With no backup, or when the first of those moments is already past
+ * (backup older than a week), start from tomorrow at 10:00 instead.
+ */
+function reminderDates(lastBackupAt: string | null): Date[] {
+  const parsed = lastBackupAt ? new Date(lastBackupAt) : null;
+  const last = parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
+  if (last) {
+    const firstReminder = addDaysAtHour(last, 7);
+    if (firstReminder.getTime() > Date.now()) {
+      return [7, 14, 21, 28].map((offset) => addDaysAtHour(last, offset));
+    }
+  }
+  const today = new Date();
+  return [1, 8, 15, 22].map((offset) => addDaysAtHour(today, offset));
 }
 
 export async function scheduleBackupReminders(): Promise<void> {
@@ -78,8 +87,7 @@ export async function scheduleBackupReminders(): Promise<void> {
   if (!allowed) return;
   await cancelBackupReminders();
   const lastBackupAt = await getSetting('last_backup_at');
-  for (const offset of daysFrom(lastBackupAt)) {
-    const date = reminderDate(offset);
+  for (const date of reminderDates(lastBackupAt)) {
     if (date.getTime() <= Date.now()) continue;
     await Notifications.scheduleNotificationAsync({
       content: {

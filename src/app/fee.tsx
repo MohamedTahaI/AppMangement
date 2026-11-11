@@ -1,7 +1,7 @@
 import { AppText } from '@/components/ui/AppText';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 
 import { listFeeRates, setFeeRate } from '@/db/fees';
 import { getFeeForMonth } from '@/services/billing';
@@ -13,6 +13,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FormField } from '@/components/ui/FormField';
 import { MonthPicker, getCurrentMonth, getMonthLabel } from '@/components/ui/MonthPicker';
 import { MoneyText } from '@/components/ui/MoneyText';
+import { Screen } from '@/components/ui/Screen';
 import { ScreenTitle } from '@/components/ui/ScreenTitle';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { SuccessSheet } from '@/components/ui/SuccessSheet';
@@ -89,7 +90,7 @@ export default function FeeScreen() {
 
   return (
     <>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <Screen>
         <BackButton onPress={() => router.back()} label="رجوع" />
         <ScreenTitle title="الفاتورة الشهرية" subtitle="تغيير قيمة الفاتورة من شهر محدد" />
         {loading ? <Skeleton height={theme.sizes.regularCardHeight} /> : null}
@@ -105,7 +106,7 @@ export default function FeeScreen() {
           disabled={loading || currentFee === null}
         />
         {error ? <AppText style={styles.error}>{error}</AppText> : null}
-      </ScrollView>
+      </Screen>
 
       <AppBottomSheet
         visible={editorVisible}
@@ -158,14 +159,6 @@ export default function FeeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    padding: theme.spacingScale.screen,
-    paddingTop: theme.spacingScale.md,
-    gap: theme.spacingScale.sm,
-    backgroundColor: theme.colors.background,
-    writingDirection: 'rtl',
-  },
   label: {
     color: theme.colors.text,
     fontSize: theme.typography.body,

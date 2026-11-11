@@ -1,6 +1,6 @@
 const SECRET = 'CHANGE_ME';
 
-var SCHEMA_VERSION = 3;
+var SCHEMA_VERSION = 4;
 var KEY_HEADER = '__key__';
 var TOTAL_KEY = 'TOTAL';
 
@@ -21,12 +21,12 @@ var COLORS = {
 };
 
 /**
- * Expected POST JSON (v3):
+ * Expected POST JSON (v4):
  * {
  *   "secret": "the same secret configured in the app",
  *   "action": "ping" | "sync",
  *   "data": {
- *     "schemaVersion": 3,
+ *     "schemaVersion": 4,
  *     "revision": "client revision",
  *     "baseRevision": "last revision stored on the phone",
  *     "full": false,
@@ -61,7 +61,7 @@ function doPost(e) {
       throw fail_('bad_secret', 'رمز الاتصال غير صحيح.');
     }
     if (request.action === 'ping') {
-      return jsonResponse_(ping_());
+      return jsonResponse_(ping_(request.expectedTabs));
     }
     if (request.action !== 'sync') {
       throw fail_('bad_action', 'نوع الطلب غير مدعوم.');
@@ -86,13 +86,18 @@ function doPost(e) {
   } catch (error) {
     return jsonResponse_({
       ok: false,
-      code: error && error.code ? String(error.code) : 'server_error',
+      code: error && error.code ? String(error.code) : 'SCRIPT_ERROR',
       error: error && error.message ? String(error.message) : 'تعذر تحديث الجدول.',
     });
   }
 }
 
-function ping_() {
+/**
+ * Read-only health check: never writes, never takes the lock, never throws.
+ * `expectedTabs` is the list of sheet names the app expects, so the app can
+ * tell "everything is fine" from "the sheets still have to be built".
+ */
+function ping_(expectedTabs) {
   var properties = PropertiesService.getScriptProperties();
   var schemaVersion = Number(properties.getProperty('schemaVersion')) || 0;
   var revision = properties.getProperty('revision') || '';
@@ -102,11 +107,30 @@ function ping_() {
   } catch (error) {
     rowCounts = {};
   }
+
+  var tabsMissing = [];
+  if (Array.isArray(expectedTabs)) {
+    try {
+      var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+      if (spreadsheet) {
+        expectedTabs.forEach(function (name) {
+          if (typeof name === 'string' && name && !spreadsheet.getSheetByName(name)) {
+            tabsMissing.push(name);
+          }
+        });
+      }
+    } catch (error) {
+      tabsMissing = [];
+    }
+  }
+
   return {
     ok: true,
     schemaVersion: schemaVersion,
     revision: revision,
     rowCounts: rowCounts,
+    tabsMissing: tabsMissing,
+    needsFull: tabsMissing.length > 0 || schemaVersion !== SCHEMA_VERSION || !revision,
   };
 }
 
@@ -356,12 +380,11 @@ function formatTab_(sheet, tab, entries) {
   headerRange.setFontWeight('bold').setBackground(COLORS.header).setWrap(true);
 
   tab.headers.forEach(function (header, index) {
-    var width = 90;
     var maxChars = String(header).length;
     entries.forEach(function (entry) {
       maxChars = Math.max(maxChars, String(entry[1][index] === undefined ? '' : entry[1][index]).length);
     });
-    width = Math.max(90, Math.min(260, maxChars * 8 + 24));
+    var width = Math.max(89, Math.min(320, Math.round(maxChars * 9.8 + 33)));
     sheet.setColumnWidth(index + 2, width);
     if (header === 'التاريخ' && entries.length > 0) {
       sheet.getRange(2, index + 2, entries.length, 1).setNumberFormat('yyyy-mm-dd');
@@ -448,9 +471,18 @@ function testWithSampleData() {
   var tabs = [
     sampleTab_('summary', 'الملخص', ['البيان', 'القيمة'], [
       ['اسم العمارة', 'عمارة النخيل'],
+      ['الفترة', '2026-11'],
+      ['تاريخ إنشاء التقرير', '2026-11-11'],
       ['إجمالي التحصيل', 2400],
+      ['تحصيلات خاصة', 600],
+      ['تعديلات الرصيد', 200],
       ['إجمالي المصروفات', 650],
-      ['الرصيد', 1750],
+      ['الرصيد', 2550],
+      ['الشقق التي دفعت', '1 من 2'],
+      ['عدد الدفعات', 3],
+      ['عدد المصروفات', 2],
+      ['عدد التحصيلات الخاصة', 1],
+      ['الشقق المتأخرة', 1],
     ], [1]),
     sampleTab_('apartmentStatus', 'حالة الشقق', ['رقم الشقة', 'اسم المالك', 'المطلوب', 'المدفوع', 'المتبقي', 'الحالة', 'الشهور المدفوعة'], [
       ['1', 'أحمد', 400, 400, 0, 'مدفوع', '2026-10'],
@@ -458,7 +490,7 @@ function testWithSampleData() {
     ], [2, 3, 4], [2, 3, 4], true),
     sampleTab_('months', 'جدول الأشهر', ['السنة', 'رقم الشقة', 'اسم المالك', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', 'إجمالي المدفوع', 'إجمالي المتبقي'], [
       [2026, '1', 'أحمد', 400, 400, 400, 400, 400, 400, 400, 400, 400, 400, 200, 0, 4400, 200],
-    ], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]),
+    ], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]),
     sampleTab_('payments', 'الدفعات', ['التاريخ', 'رقم الشقة', 'اسم المالك', 'النوع', 'الشهر أو التحصيل', 'المبلغ', 'ملاحظة'], [
       ['2026-11-03', '1', 'أحمد', 'اشتراك شهري', '2026-11', 200, ''],
     ], [5], [5], true),
@@ -478,14 +510,14 @@ function testWithSampleData() {
     ], [1], [1]),
     sampleTab_('adjustments', 'التعديلات', ['التاريخ', 'النوع', 'المبلغ', 'السبب', 'الحالة', 'سبب الإلغاء'], [
       ['2026-11-02', 'زيادة', 200, 'تصحيح رصيد سابق', 'سارية', ''],
-    ], [2]),
+    ], [2], [2]),
     sampleTab_('unpaid', 'المتأخرين', ['رقم الشقة', 'اسم المالك', 'الشهور غير المدفوعة', 'إجمالي المتبقي'], [
       ['2', 'سارة', '2026-11', 400],
     ], [3], [3]),
-    sampleTab_('monthlySummary', 'ملخص كل شهر', ['الشهر', 'التحصيل', 'المصروفات', 'الصافي'], [
-      ['2026-10', 1200, 250, 950],
-      ['2026-11', 1200, 400, 800],
-    ], [1, 2, 3], [1, 2, 3]),
+    sampleTab_('monthlySummary', 'ملخص كل شهر', ['الشهر', 'التحصيل', 'التحصيلات الخاصة', 'تعديلات الرصيد', 'المصروفات', 'الرصيد'], [
+      ['2026-10', 1200, 0, 0, 250, 950],
+      ['2026-11', 1200, 600, 200, 400, 1600],
+    ], [1, 2, 3, 4, 5], [1, 2, 3, 4, 5]),
   ];
 
   writePayload_({

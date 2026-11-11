@@ -1,28 +1,24 @@
-import { SectionHeader } from '@/components/ui/SectionHeader';
 import { AppText } from '@/components/ui/AppText';
-import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { File, Paths } from 'expo-file-system';
-import { copyAsync, deleteAsync, readAsStringAsync } from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
-import { setSetting } from '@/db/settings';
 import { BigButton } from '@/components/ui/BigButton';
 import { BackButton } from '@/components/ui/BackButton';
 import { Card } from '@/components/ui/Card';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { AppBottomSheet } from '@/components/ui/AppBottomSheet';
 import { MonthPicker, getCurrentMonth } from '@/components/ui/MonthPicker';
+import { Screen } from '@/components/ui/Screen';
+import { Section } from '@/components/ui/Section';
 import { ScreenTitle } from '@/components/ui/ScreenTitle';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
-import { theme } from '@/components/ui/theme';
-import { createDatabaseBackup, restoreDatabaseBackup, validateDatabaseBackup, type DatabaseBackup } from '@/services/backup';
+import { theme } from '@/theme';
 import { getReportData, type ReportPeriod } from '@/services/reportData';
 import { buildReportPdfHtml } from '@/services/reportPdf';
 import { writeReportWorkbook } from '@/services/reportExcel';
-import { scheduleBackupReminders } from '@/services/reminders';
+import { useRouter } from 'expo-router';
 
 type PeriodKind = ReportPeriod['kind'];
 
@@ -32,32 +28,10 @@ function periodFor(kind: PeriodKind, month: string, year: number): ReportPeriod 
   return { kind: 'month', value: month };
 }
 
-function periodFileLabel(kind: PeriodKind, month: string, year: number): string {
+function periodFileLabel(kind: PeriodKind, month: string): string {
   if (kind === 'all') return 'الكل';
-  if (kind === 'year') return `${year}-السنة`;
+  if (kind === 'year') return 'السنة';
   return month;
-}
-
-async function readPickedFile(uri: string): Promise<string> {
-  let directError: unknown = null;
-  try {
-    return await new File(uri).text();
-  } catch (error) {
-    directError = error;
-  }
-  const cached = new File(Paths.cache, `restore-${Date.now()}.json`);
-  try {
-    await copyAsync({ from: uri, to: cached.uri });
-    return await readAsStringAsync(cached.uri, { encoding: 'utf8' });
-  } catch (fallbackError) {
-    const detail = [directError, fallbackError]
-      .map((error) => (error instanceof Error ? error.message : String(error)))
-      .filter(Boolean)
-      .join(' | ');
-    throw new Error(`تعذر قراءة الملف من الجهاز. (${detail})`, { cause: fallbackError });
-  } finally {
-    await deleteAsync(cached.uri, { idempotent: true }).catch(() => undefined);
-  }
 }
 
 function technicalError(error: unknown): string {
@@ -71,13 +45,13 @@ function technicalError(error: unknown): string {
 }
 
 function arabicFailure(error: unknown, fallback: string): string {
-  if (error instanceof Error && /[\u0600-\u06FF]/u.test(error.message) && !/[A-Za-z]/u.test(error.message)) {
+  if (error instanceof Error && /[؀-ۿ]/u.test(error.message) && !/[A-Za-z]/u.test(error.message)) {
     return error.message;
   }
   return fallback;
 }
 
-export default function ExportBackupScreen() {
+export default function ExportScreen() {
   const router = useRouter();
   const [periodKind, setPeriodKind] = useState<PeriodKind>('month');
   const [month, setMonth] = useState(getCurrentMonth());
@@ -93,7 +67,6 @@ export default function ExportBackupScreen() {
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [pendingBackup, setPendingBackup] = useState<DatabaseBackup | null>(null);
 
   const currentPeriod = () => periodFor(periodKind, month, year);
   const reportFailure = (context: string, cause: unknown, fallback: string) => {
@@ -166,7 +139,7 @@ export default function ExportBackupScreen() {
     try {
       const report = await getReportData(currentPeriod());
       const bytes = writeReportWorkbook(report);
-      const label = periodFileLabel(periodKind, month, year);
+      const label = periodFileLabel(periodKind, month);
       const file = new File(Paths.cache, `تقرير-العمارة-${label}.xlsx`);
       file.create({ intermediates: true, overwrite: true });
       await file.write(bytes);
@@ -182,110 +155,43 @@ export default function ExportBackupScreen() {
     }
   };
 
-  const createBackup = async () => {
-    setBusy(true);
-    setError(null);
-    setErrorDetail(null);
-    setNotice(null);
-    try {
-      const backup = await createDatabaseBackup();
-      const file = new File(Paths.cache, `نسخة-احتياطية-العمارة-${backup.createdAt.slice(0, 10)}.json`);
-      file.create({ intermediates: true, overwrite: true });
-      await file.write(JSON.stringify(backup, null, 2));
-      await Sharing.shareAsync(file.uri, {
-        mimeType: 'application/json',
-        dialogTitle: 'حفظ نسخة احتياطية من بيانات العمارة',
-      });
-      await setSetting('last_backup_at', new Date().toISOString());
-      await scheduleBackupReminders().catch(() => undefined);
-      setNotice('تم تجهيز النسخة الاحتياطية وفتح قائمة المشاركة.');
-    } catch (backupError) {
-      reportFailure('Backup creation failed', backupError, 'تعذر إنشاء النسخة الاحتياطية.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const chooseBackup = async () => {
-    setBusy(true);
-    setError(null);
-    setErrorDetail(null);
-    setNotice(null);
-    try {
-      const picked = await File.pickFileAsync({ mimeTypes: ['*/*'] });
-      if (picked.canceled || !picked.result) return;
-      const contents = await readPickedFile(picked.result.uri);
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(contents.replace(/^\uFEFF/, '')) as unknown;
-      } catch (parseError) {
-        throw new Error('الملف ليس نسخة احتياطية من هذا التطبيق.', { cause: parseError });
-      }
-      const validated = validateDatabaseBackup(parsed);
-      setPendingBackup(validated);
-    } catch (restoreError) {
-      reportFailure('Backup selection or validation failed', restoreError, 'تعذر قراءة ملف النسخة الاحتياطية.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const confirmRestore = async () => {
-    if (!pendingBackup) return;
-    setBusy(true);
-    setError(null);
-    setErrorDetail(null);
-    setNotice(null);
-    try {
-      await restoreDatabaseBackup(pendingBackup);
-      setPendingBackup(null);
-      router.replace({ pathname: '/(tabs)', params: { restored: String(Date.now()) } });
-    } catch (restoreError) {
-      setPendingBackup(null);
-      reportFailure('Backup restore failed', restoreError, 'تعذرت استعادة النسخة. لم يتم تغيير البيانات.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
     <>
-      <ScrollView contentContainerStyle={styles.container}>
+      <Screen>
         <BackButton onPress={() => router.back()} label="رجوع" />
-        <ScreenTitle title="تصدير / باك أب" subtitle="تصدير التقارير أو حفظ واستعادة البيانات" />
-        <Card style={styles.periodCard}>
-          <SectionHeader title="فترة التقرير" />
-          <View style={styles.periodOptions}>
-            {([
-              ['month', 'هذا الشهر'],
-              ['year', 'هذه السنة'],
-              ['all', 'كل الفترات'],
-            ] as [PeriodKind, string][]).map(([kind, label]) => (
-              <Pressable
-                key={kind}
-                accessibilityRole="button"
-                accessibilityState={{ selected: !customPeriodApplied && periodKind === kind }}
-                onPress={() => chooseQuickPeriod(kind)}
-                style={[styles.periodOption, !customPeriodApplied && periodKind === kind && styles.periodSelected]}>
-                <AppText style={[styles.periodText, !customPeriodApplied && periodKind === kind && styles.periodTextSelected]}>
-                  {label}
-                </AppText>
-              </Pressable>
-            ))}
-          </View>
-          <Pressable accessibilityRole="button" onPress={openCustomPeriod}>
-            <AppText style={styles.customPeriodLink}>اختيار شهر أو سنة أخرى</AppText>
-          </Pressable>
-        </Card>
-        <SectionHeader title="التقارير" />
-        <BigButton title={busy ? 'جارٍ التجهيز...' : 'حفظ التقرير PDF'} disabled={busy} onPress={() => void exportPdf()} />
-        <BigButton title={busy ? 'جارٍ التجهيز...' : 'جدول بيانات'} variant="secondary" disabled={busy} onPress={() => void exportExcel()} />
-        <AppText style={styles.note}>
-          سيفتح الهاتف قائمة المشاركة، ومنها يمكنك حفظ الملف في الهاتف أو إرساله.
-        </AppText>
-        <SectionHeader title="النسخة الاحتياطية" />
-        <BigButton title={busy ? 'جارٍ التجهيز...' : 'حفظ نسخة احتياطية'} disabled={busy} onPress={() => void createBackup()} />
-        <BigButton title={busy ? 'جارٍ الفتح...' : 'استعادة نسخة احتياطية'} variant="secondary" disabled={busy} onPress={() => void chooseBackup()} />
+        <ScreenTitle title="تصدير التقارير" subtitle="اختر فترة التقرير وصيغة التصدير" />
+        <Section title="فترة التقرير">
+          <Card style={styles.periodCard}>
+            <View style={styles.periodOptions}>
+              {([
+                ['month', 'هذا الشهر'],
+                ['year', 'هذه السنة'],
+                ['all', 'كل الفترات'],
+              ] as [PeriodKind, string][]).map(([kind, label]) => (
+                <Pressable
+                  key={kind}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: !customPeriodApplied && periodKind === kind }}
+                  onPress={() => chooseQuickPeriod(kind)}
+                  style={[styles.periodOption, !customPeriodApplied && periodKind === kind && styles.periodSelected]}>
+                  <AppText style={[styles.periodText, !customPeriodApplied && periodKind === kind && styles.periodTextSelected]}>
+                    {label}
+                  </AppText>
+                </Pressable>
+              ))}
+            </View>
+            <Pressable accessibilityRole="button" onPress={openCustomPeriod}>
+              <AppText style={styles.customPeriodLink}>اختيار شهر أو سنة أخرى</AppText>
+            </Pressable>
+          </Card>
+        </Section>
+        <Section title="التقارير">
+          <BigButton title={busy ? 'جارٍ التجهيز...' : 'حفظ التقرير PDF'} disabled={busy} onPress={() => void exportPdf()} />
+          <BigButton title={busy ? 'جارٍ التجهيز...' : 'جدول بيانات'} variant="secondary" disabled={busy} onPress={() => void exportExcel()} />
+          <AppText style={styles.note}>
+            سيفتح الهاتف قائمة المشاركة، ومنها يمكنك حفظ الملف في الهاتف أو إرساله.
+          </AppText>
+        </Section>
         {error ? (
           <View style={styles.errorBox}>
             <AppText style={styles.error}>{error}</AppText>
@@ -305,7 +211,7 @@ export default function ExportBackupScreen() {
         ) : null}
         {notice ? <AppText style={styles.success}>{notice}</AppText> : null}
         {buildingName ? <AppText style={styles.note}>{buildingName}</AppText> : null}
-      </ScrollView>
+      </Screen>
 
       <AppBottomSheet
         visible={customPeriodVisible}
@@ -322,49 +228,13 @@ export default function ExportBackupScreen() {
         <MonthPicker month={customMonth} onChange={setCustomMonth} />
         <BigButton title="تطبيق الفترة" onPress={applyCustomPeriod} />
       </AppBottomSheet>
-
-      <ConfirmDialog
-        visible={pendingBackup !== null}
-        title="تحذير: استبدال جميع البيانات"
-        message={`سيتم مسح البيانات الحالية واستبدالها بالكامل بمحتوى النسخة الاحتياطية المؤرخة ${pendingBackup?.createdAt.slice(0, 10) ?? ''}. لا يمكن التراجع عن ذلك. لا تتابع إلا إذا كنت متأكداً أن هذه هي النسخة الصحيحة.`}
-        confirmLabel="استبدال كل البيانات"
-        cancelLabel="إلغاء"
-        destructive
-        onConfirm={() => void confirmRestore()}
-        onCancel={() => setPendingBackup(null)}
-      />
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    padding: theme.spacingScale.screen,
-    paddingTop: theme.spacingScale.md,
-    paddingBottom: theme.spacingScale.lg,
-    gap: theme.spacingScale.sm,
-    backgroundColor: theme.colors.background,
-    writingDirection: 'rtl',
-  },
-  back: {
-    minHeight: theme.sizes.touchCompact,
-    alignSelf: 'flex-start',
-    justifyContent: 'center',
-  },
-  backText: {
-    color: theme.colors.primary,
-    fontSize: theme.typography.body,
-    fontFamily: theme.typography.bold,
-  },
   periodCard: {
     gap: theme.spacingScale.sm,
-  },
-  sectionTitle: {
-    color: theme.colors.text,
-    fontSize: theme.typography.heading,
-    fontFamily: theme.typography.extraBold,
-    textAlign: 'auto',
   },
   periodOptions: {
     flexDirection: 'row',

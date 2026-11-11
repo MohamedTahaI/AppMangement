@@ -3,7 +3,7 @@ import { AppText } from '@/components/ui/AppText';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
 import { BigButton } from '@/components/ui/BigButton';
@@ -12,7 +12,10 @@ import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FormField } from '@/components/ui/FormField';
 import { RowAction } from '@/components/ui/RowAction';
+import { Screen } from '@/components/ui/Screen';
 import { ScreenTitle } from '@/components/ui/ScreenTitle';
+import { Section } from '@/components/ui/Section';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { theme } from '@/components/ui/theme';
 import { addAdjustment, cancelAdjustment, listAdjustments, type Adjustment, type AdjustmentType } from '@/db/adjustments';
@@ -131,7 +134,7 @@ export default function AdjustmentsScreen() {
 
   return (
     <>
-      <ScrollView contentContainerStyle={styles.container}>
+      <Screen>
         <BackButton onPress={() => router.back()} label="رجوع" />
         <ScreenTitle title="تعديل الرصيد" subtitle="استخدمها لو دخلت فلوس من بره العمارة، أو لتصحيح الرصيد، مع كتابة السبب" />
         {loading ? <Skeleton height={theme.sizes.regularCardHeight} /> : (
@@ -146,20 +149,14 @@ export default function AdjustmentsScreen() {
         )}
         <Card style={styles.formCard}>
           <SectionHeader title="إضافة تعديل للرصيد" />
-          <View style={styles.typeRow}>
-            {([
-              ['increase', 'زيادة'],
-              ['decrease', 'نقص'],
-            ] as [AdjustmentType, string][]).map(([itemType, label]) => (
-              <Pressable
-                key={itemType}
-                accessibilityRole="button"
-                onPress={() => setType(itemType)}
-                style={[styles.typeButton, type === itemType && styles.typeSelected]}>
-                <AppText style={[styles.typeText, type === itemType && styles.typeTextSelected]}>{label}</AppText>
-              </Pressable>
-            ))}
-          </View>
+          <SegmentedControl<AdjustmentType>
+            value={type}
+            options={[
+              { value: 'increase', label: 'زيادة' },
+              { value: 'decrease', label: 'نقص' },
+            ]}
+            onChange={setType}
+          />
           <FormField
             label="المبلغ"
             value={amount}
@@ -204,7 +201,7 @@ export default function AdjustmentsScreen() {
 
         {error ? <AppText style={styles.error}>{error}</AppText> : null}
         {notice ? <AppText style={styles.success}>{notice}</AppText> : null}
-        <SectionHeader title="سجل تعديلات الرصيد" />
+        <Section title="سجل تعديلات الرصيد">
         {items.length === 0 ? (
           <Card><AppText style={styles.empty}>لا توجد تعديلات على الرصيد حتى الآن.</AppText></Card>
         ) : items.map((item) => (
@@ -277,7 +274,8 @@ export default function AdjustmentsScreen() {
             )}
           </Card>
         ))}
-      </ScrollView>
+        </Section>
+      </Screen>
 
       <ConfirmDialog
         visible={confirmAdd}
@@ -301,17 +299,6 @@ export default function AdjustmentsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    padding: theme.spacingScale.screen,
-    paddingTop: theme.spacingScale.md,
-    paddingBottom: theme.spacingScale.lg,
-    gap: theme.spacingScale.sm,
-    backgroundColor: theme.colors.background,
-    writingDirection: 'rtl',
-  },
-  back: { minHeight: theme.sizes.touchCompact, alignSelf: 'flex-start', justifyContent: 'center' },
-  backText: { color: theme.colors.primary, fontSize: theme.typography.body, fontFamily: theme.typography.bold },
   formCard: { gap: theme.spacingScale.sm },
   totalCard: { alignItems: 'flex-end', gap: theme.spacingScale.xs },
   totalLabel: { color: theme.colors.secondaryText, fontSize: theme.typography.body, textAlign: 'auto' },
@@ -319,20 +306,6 @@ const styles = StyleSheet.create({
   previewCard: { alignItems: 'flex-end', paddingVertical: theme.spacingScale.xs, gap: theme.spacingScale.xs, backgroundColor: theme.colors.paidBackground },
   hint: { color: theme.colors.secondaryText, fontSize: theme.typography.small, textAlign: 'auto' },
   sectionTitle: { color: theme.colors.text, fontSize: theme.typography.heading, fontFamily: theme.typography.extraBold, textAlign: 'auto' },
-  typeRow: { flexDirection: 'row', gap: theme.spacingScale.xs },
-  typeButton: {
-    flex: 1,
-    minHeight: theme.sizes.touch,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: theme.radius,
-    borderWidth: theme.borderWidths.hairline,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface,
-  },
-  typeSelected: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
-  typeText: { color: theme.colors.text, fontSize: theme.typography.section, fontFamily: theme.typography.bold },
-  typeTextSelected: { color: theme.colors.surface },
   warning: { color: theme.colors.warning, fontSize: theme.typography.body, textAlign: 'auto' },
   error: { color: theme.colors.danger, fontSize: theme.typography.body, textAlign: 'auto' },
   success: { color: theme.colors.success, fontSize: theme.typography.body, fontFamily: theme.typography.bold, textAlign: 'auto' },

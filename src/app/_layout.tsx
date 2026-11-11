@@ -212,7 +212,7 @@ export default function RootLayout() {
               <Stack.Screen name="specials" />
               <Stack.Screen name="special-details/[id]" />
               <Stack.Screen name="overdue" />
-              <Stack.Screen name="export-backup" />
+              <Stack.Screen name="export" />
               <Stack.Screen name="backup" />
               <Stack.Screen name="sync" />
               <Stack.Screen name="app-pin" />

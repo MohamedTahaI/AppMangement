@@ -6,6 +6,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { getDatabase, subscribeToDirty } from '@/db/schema';
 import { getSetting } from '@/db/settings';
 import { getReportData } from './reportData';
+import { REPORT_TABLE_NAMES, SHEET_SCHEMA_VERSION } from './reportTables';
 import {
   buildSheetSnapshot,
   buildSheetSyncPayload,
@@ -32,15 +33,48 @@ export interface PingResult {
   revision: string;
   schemaVersion: number | null;
   rowCounts: Record<string, number>;
+  tabsMissing: string[];
+  needsFull: boolean;
+}
+
+/**
+ * A failure whose Arabic wording was already built on purpose, so the UI can
+ * show it as-is (it may contain technical hints such as /exec) together with
+ * `details` for the collapsible تفاصيل row.
+ */
+export class SheetError extends Error {
+  details: string | null;
+  safeMessage = true;
+
+  constructor(message: string, details: string | null = null) {
+    super(message);
+    this.details = details;
+  }
 }
 
 class SyncServerError extends Error {
   code: string;
+  status: number | null;
+  details: string | null;
 
-  constructor(message: string, code = 'server_error') {
+  constructor(
+    message: string,
+    code = 'server_error',
+    status: number | null = null,
+    details: string | null = null,
+  ) {
     super(message);
     this.code = code;
+    this.status = status;
+    this.details = details;
   }
+}
+
+export function sheetErrorDetails(error: unknown): string | null {
+  if (error instanceof SheetError) return error.details;
+  if (error instanceof SyncServerError) return error.details;
+  if (error instanceof Error && error.message) return error.message;
+  return null;
 }
 
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -60,15 +94,91 @@ function invalidatePendingCache(): void {
   pendingCache = null;
 }
 
+function isArabicOnly(message: string): boolean {
+  return /[؀-ۿ]/u.test(message) && !/[A-Za-z]/u.test(message);
+}
+
+function httpErrorMessage(status: number | null): string {
+  if (status === 401 || status === 403) {
+    return 'تم رفض الوصول إلى الجدول. تحقق من أن «من لديه حق الوصول» في نشر السكربت «أي شخص» ثم أعد نشر إصدار جديد.';
+  }
+  if (status === 404) {
+    return 'رابط الجدول غير صحيح أو أن عملية النشر لم تعد متاحة. أعد نشر إصدار جديد وانسخ الرابط المنتهي بـ /exec.';
+  }
+  if (status === null) return 'تعذر الاتصال بالجدول. تحقق من الإنترنت والرابط والرمز.';
+  return `تعذر الوصول إلى الجدول (رمز ${status}). أعد نشر السكربت ثم حاول مرة أخرى.`;
+}
+
 function shortArabicError(error: unknown): string {
-  if (error instanceof Error && /timeout|aborted|network|failed to fetch/i.test(error.message)) {
+  if (error instanceof SheetError) return error.message;
+  const message = error instanceof Error ? error.message : '';
+
+  if (error instanceof SyncServerError) {
+    if (error.code === 'bad_secret') return 'رمز الاتصال غير صحيح.';
+    if (error.code === 'bad_action') {
+      return 'السكربت المنشور قديم. حدث الكود من محرر السكريبت ثم أعد نشر إصدار جديد.';
+    }
+    if (error.code === 'invalid_response') {
+      return 'استجابة غير متوقعة من جوجل. أعد نشر السكربت ثم حاول مرة أخرى.';
+    }
+    if (error.code === 'http_error') return httpErrorMessage(error.status);
+    if (error.code === 'busy') return 'الجدول مشغول، حاول مرة أخرى.';
+    if (isArabicOnly(message)) return message;
+    if (message.startsWith('تعذر')) return message;
+    return 'تعذر الاتصال بالجدول. تحقق من الإنترنت والرابط والرمز.';
+  }
+
+  if (/timeout|aborted|network|failed to fetch/i.test(message)) {
     return 'انتهت مهلة الاتصال. تحقق من الإنترنت وحاول مرة أخرى.';
   }
-  if (error instanceof Error && /secret|رمز الاتصال/i.test(error.message)) {
-    return 'رمز الاتصال غير صحيح.';
-  }
-  if (error instanceof Error && error.message.startsWith('تعذر')) return error.message;
+  if (/secret|رمز الاتصال/i.test(message)) return 'رمز الاتصال غير صحيح.';
+  if (isArabicOnly(message) || message.startsWith('تعذر')) return message;
   return 'تعذر الاتصال بالجدول. تحقق من الإنترنت والرابط والرمز.';
+}
+
+function pingFailure(error: unknown): SheetError {
+  if (error instanceof SheetError) return error;
+  const details = sheetErrorDetails(error);
+
+  if (error instanceof SyncServerError) {
+    if (error.code === 'bad_secret') return new SheetError('الرمز السري غير مطابق.', details);
+    if (error.code === 'bad_action') {
+      return new SheetError('السكربت المنشور قديم. حدث الكود من محرر السكريبت ثم أعد نشر إصدار جديد.', details);
+    }
+    if (error.code === 'invalid_response') {
+      return new SheetError('استجابة غير متوقعة من جوجل. أعد نشر السكربت ثم حاول مرة أخرى.', details);
+    }
+    if (error.code === 'http_error') {
+      if (error.status === 401 || error.status === 403) {
+        return new SheetError('الرابط غير صحيح. تأكد أنه ينتهي بـ /exec وأن الوصول (أي شخص).', details);
+      }
+      if (error.status === 404) {
+        return new SheetError('الرابط غير صحيح. تأكد أنه ينتهي بـ /exec وأن عملية النشر فعّالة.', details);
+      }
+      return new SheetError(
+        `تعذر الوصول إلى الجدول (رمز ${error.status ?? '?'}). أعد نشر السكربت ثم حاول مرة أخرى.`,
+        details,
+      );
+    }
+    return new SheetError(isArabicOnly(error.message) ? error.message : 'تعذر الاتصال بالجدول.', details);
+  }
+
+  const message = error instanceof Error ? error.message : '';
+  if (/timeout|aborted|network|failed to fetch/i.test(message)) {
+    return new SheetError('انتهت مهلة الاتصال. تحقق من الإنترنت وحاول مرة أخرى.', details);
+  }
+  if (/secret|رمز الاتصال/i.test(message)) return new SheetError('الرمز السري غير مطابق.', details);
+  if (message) return new SheetError(message, details);
+  return new SheetError('تعذر الاتصال بالجدول. تحقق من الإنترنت والرابط والرمز.', details);
+}
+
+export function pingMessage(ping: PingResult): string {
+  if (ping.tabsMissing.length > 0) {
+    return `الاتصال سليم. ناقص ${ping.tabsMissing.length} من أوراق الجدول، وسيُبنى الجدول من جديد عند أول تحديث.`;
+  }
+  if (ping.needsFull) return 'الاتصال سليم. الجدول سيُبنى من جديد عند أول تحديث.';
+  if (ping.revision) return `الاتصال سليم. الجدول محدّث (نسخة ${ping.revision}).`;
+  return 'الاتصال سليم. الجدول جاهز.';
 }
 
 function isNetworkError(error: unknown): boolean {
@@ -144,15 +254,24 @@ export function takeUnlinkedToast(): boolean {
   return true;
 }
 
+function responseDetails(status: number | null, body: string): string {
+  const snippet = body.replace(/\s+/g, ' ').trim().slice(0, 300);
+  const head = status === null ? 'استجابة غير متوقعة' : `HTTP ${status}`;
+  return snippet ? `${head} — ${snippet}` : head;
+}
+
 async function postRequest(
   action: 'ping' | 'sync',
   data?: SheetSyncPayload,
 ): Promise<Record<string, unknown>> {
   const url = (await getSetting('sheet_url'))?.trim() ?? '';
   const secret = (await getSetting('sheet_secret')) ?? '';
-  if (!url || !secret) throw new Error('أدخل رابط الجدول والرمز السري أولاً.');
-  if (!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec(?:\?.*)?$/.test(url)) {
-    throw new Error('رابط الجدول غير صحيح. استخدم رابط تطبيق الويب المنتهي بـ /exec.');
+  if (!url || !secret) throw new SheetError('أدخل رابط الجدول والرمز السري أولاً.');
+  if (!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec(?:\?.*)?$/i.test(url)) {
+    throw new SheetError(
+      'رابط الجدول غير صحيح. يجب أن ينتهي بامتداد تطبيق الويب.',
+      'الرابط يجب أن يبدأ بـ https://script.google.com/macros/s/ وينتهي بـ /exec، وأن يكون «من لديه حق الوصول» = أي شخص.',
+    );
   }
 
   const controller = new AbortController();
@@ -161,20 +280,42 @@ async function postRequest(
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ secret, action, ...(data ? { data } : {}) }),
+      body: JSON.stringify(
+        action === 'ping'
+          ? { secret, action, expectedTabs: Object.values(REPORT_TABLE_NAMES) }
+          : { secret, action, data },
+      ),
       signal: controller.signal,
     });
+    const status = typeof response.status === 'number' ? response.status : null;
+    const text = await response.text();
     if (!response.ok) {
-      throw new SyncServerError(`تعذر الاتصال بالجدول (HTTP ${response.status}).`, 'http_error');
+      if (__DEV__) console.error('استجابة الجدول غير ناجحة', status, text.slice(0, 300));
+      throw new SyncServerError(
+        `تعذر الاتصال بالجدول (HTTP ${status ?? '?'}).`,
+        'http_error',
+        status,
+        responseDetails(status, text),
+      );
     }
     let result: { ok?: boolean; error?: string; code?: string };
     try {
-      result = await response.json() as { ok?: boolean; error?: string; code?: string };
+      result = JSON.parse(text) as { ok?: boolean; error?: string; code?: string };
     } catch {
-      throw new SyncServerError('استجابة الجدول غير صحيحة. تأكد من نشر السكربت الجديد.', 'invalid_response');
+      if (__DEV__) console.error('استجابة الجدول ليست JSON', status, text.slice(0, 300));
+      throw new SyncServerError(
+        'استجابة الجدول غير صحيحة. تأكد من نشر السكربت الجديد.',
+        'invalid_response',
+        status,
+        responseDetails(status, text),
+      );
     }
-    if (result.ok !== true) {
-      throw new SyncServerError(result.error || 'تعذر تحديث الجدول.', result.code || 'server_error');
+    if (!result || typeof result !== 'object' || result.ok !== true) {
+      const message = typeof result?.error === 'string' && result.error
+        ? result.error
+        : 'تعذر تحديث الجدول.';
+      const code = typeof result?.code === 'string' && result.code ? result.code : 'server_error';
+      throw new SyncServerError(message, code, status, responseDetails(status, text));
     }
     return result as Record<string, unknown>;
   } finally {
@@ -183,18 +324,24 @@ async function postRequest(
 }
 
 export async function pingSheet(): Promise<PingResult> {
+  let result: Record<string, unknown>;
   try {
-    const result = await postRequest('ping');
-    return {
-      revision: typeof result.revision === 'string' ? result.revision : '',
-      schemaVersion: typeof result.schemaVersion === 'number' ? result.schemaVersion : null,
-      rowCounts: result.rowCounts && typeof result.rowCounts === 'object'
-        ? result.rowCounts as Record<string, number>
-        : {},
-    };
+    result = await postRequest('ping');
   } catch (error) {
-    throw new Error(shortArabicError(error));
+    throw pingFailure(error);
   }
+  const schemaVersion = typeof result.schemaVersion === 'number' ? result.schemaVersion : null;
+  const revision = typeof result.revision === 'string' ? result.revision : '';
+  const rowCounts = result.rowCounts && typeof result.rowCounts === 'object'
+    ? result.rowCounts as Record<string, number>
+    : {};
+  const tabsMissing = Array.isArray(result.tabsMissing)
+    ? result.tabsMissing.filter((name): name is string => typeof name === 'string')
+    : [];
+  const needsFull = typeof result.needsFull === 'boolean'
+    ? result.needsFull
+    : !revision || schemaVersion !== SHEET_SCHEMA_VERSION || tabsMissing.length > 0;
+  return { revision, schemaVersion, rowCounts, tabsMissing, needsFull };
 }
 
 async function performSyncNow(forceFull: boolean): Promise<SyncResult> {
@@ -271,10 +418,11 @@ async function performSyncNow(forceFull: boolean): Promise<SyncResult> {
     return await send(full);
   } catch (error) {
     const message = shortArabicError(error);
+    const details = sheetErrorDetails(error);
     if (isNetworkError(error)) {
       invalidatePendingCache();
       notifyStatusChanged();
-      throw new Error(message);
+      throw new SheetError(message, details);
     }
     await db.withTransactionAsync(async () => {
       await db.runAsync(
@@ -289,7 +437,7 @@ async function performSyncNow(forceFull: boolean): Promise<SyncResult> {
     });
     invalidatePendingCache();
     notifyStatusChanged();
-    throw new Error(message);
+    throw new SheetError(message, details);
   }
 }
 

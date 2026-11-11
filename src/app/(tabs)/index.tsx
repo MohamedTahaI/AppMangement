@@ -1,4 +1,4 @@
-import { AppText } from '@/components/ui/AppText';
+﻿import { AppText } from '@/components/ui/AppText';
 import { Screen } from '@/components/ui/Screen';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -184,6 +184,7 @@ export default function HomeScreen() {
   };
   const showUnlinkedBanner = !loading && data.apartmentCount > 0 && !data.sheetConnected && !bannerCooldown;
   const showPendingBanner = data.sheetConnected && syncStatus.pendingCount > 0;
+  const syncFailed = syncStatus.state === 'failed';
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
@@ -251,8 +252,15 @@ export default function HomeScreen() {
         </Pressable>
       ) : null}
       {showPendingBanner ? (
-        <Pressable onPress={() => router.push('/sync')} style={styles.syncBannerPending}>
-          <MaterialIcons name="cloud-upload" size={theme.sizes.icon} color={theme.colors.warning} />
+        <Pressable
+          onPress={() => router.push('/sync')}
+          accessibilityLabel={`${syncStatus.pendingCount} تغيير في انتظار الإرسال${syncFailed && syncStatus.error ? `: ${syncStatus.error}` : ''}`}
+          style={[styles.syncBannerPending, syncFailed && styles.syncBannerPendingFailed]}>
+          <MaterialIcons
+            name="cloud-upload"
+            size={theme.sizes.icon}
+            color={syncFailed ? theme.colors.danger : theme.colors.warning}
+          />
           <AppText style={styles.syncPendingText}>{syncStatus.pendingCount} تغيير في انتظار الإرسال</AppText>
         </Pressable>
       ) : null}
@@ -465,6 +473,9 @@ const styles = StyleSheet.create({
     gap: theme.spacingScale.xs,
     borderRadius: theme.radii.md,
     backgroundColor: theme.colors.warningBackground,
+  },
+  syncBannerPendingFailed: {
+    backgroundColor: theme.colors.dangerBackground,
   },
   syncBannerCopy: { flex: 1, gap: theme.spacingScale.xs },
   syncBannerText: {

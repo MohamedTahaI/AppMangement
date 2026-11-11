@@ -2,7 +2,7 @@ import { AppText } from '@/components/ui/AppText';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { Pressable, StyleSheet, Switch, View } from 'react-native';
 
 import type { MonthlyApartmentRow } from '@/services/billing';
 import { getMonthlyApartmentRows } from '@/services/billing';
@@ -13,6 +13,7 @@ import { FilterBar, type FilterStatus } from '@/components/ui/FilterBar';
 import { getCurrentMonth, getMonthLabel } from '@/components/ui/MonthPicker';
 import { MonthTransition } from '@/components/ui/MonthTransition';
 import { MoneyText } from '@/components/ui/MoneyText';
+import { Screen } from '@/components/ui/Screen';
 import { ScreenTitle } from '@/components/ui/ScreenTitle';
 import { StatusChip } from '@/components/ui/StatusChip';
 import { theme } from '@/components/ui/theme';
@@ -56,7 +57,7 @@ export default function CollectionScreen() {
       : a.apartment.number.localeCompare(b.apartment.number, undefined, { numeric: true }));
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <Screen>
       <ScreenTitle title="التحصيل الشهري" subtitle="اختر شهراً لعرض التحصيل" />
       <Pressable
         accessibilityRole="button"
@@ -167,23 +168,14 @@ export default function CollectionScreen() {
         );
       })}
       </MonthTransition>
-    </ScrollView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    padding: theme.spacingScale.screen,
-    paddingTop: theme.spacingScale.md,
-    paddingBottom: theme.spacingScale.lg,
-    gap: theme.spacingScale.sm,
-    backgroundColor: theme.colors.background,
-    writingDirection: 'rtl',
-  },
   summaryRow: {
     flexDirection: 'row',
-    gap: theme.spacingScale.xs,
+    gap: theme.spacingScale.cardGap,
   },
   specialLink: {
     minHeight: theme.sizes.touchCompact,

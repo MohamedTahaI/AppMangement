@@ -1,9 +1,8 @@
-import { SectionHeader } from '@/components/ui/SectionHeader';
 import { formatDate } from '@/utils/format';
 import { AppText } from '@/components/ui/AppText';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { listExpenses, type Expense } from '@/db/expenses';
 import { getDatabase, markDirty } from '@/db/schema';
@@ -25,7 +24,9 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { FormField } from '@/components/ui/FormField';
 import { FilterBar, type FilterStatus } from '@/components/ui/FilterBar';
 import { MoneyText, formatMoney } from '@/components/ui/MoneyText';
+import { Screen } from '@/components/ui/Screen';
 import { ScreenTitle } from '@/components/ui/ScreenTitle';
+import { Section } from '@/components/ui/Section';
 import { StatusChip } from '@/components/ui/StatusChip';
 import { theme } from '@/components/ui/theme';
 
@@ -182,10 +183,9 @@ export default function SpecialDetailsScreen() {
       : a.apartmentNumber.localeCompare(b.apartmentNumber, undefined, { numeric: true }));
 
   return (
-    <>
-      <ScrollView contentContainerStyle={styles.container}>
-        <BackButton onPress={() => router.back()} label="رجوع" />
-        {collection ? (
+    <Screen>
+      <BackButton onPress={() => router.back()} label="رجوع" />
+      {collection ? (
           <>
             <ScreenTitle title={collection.title} subtitle={`تاريخ التحصيل: ${formatDate(collection.date)}`} />
             <View style={styles.summaryRow}>
@@ -207,7 +207,7 @@ export default function SpecialDetailsScreen() {
           </>
         ) : null}
 
-        <SectionHeader title="الشقق" />
+      <Section title="الشقق">
         <FilterBar
           search={search}
           onSearchChange={setSearch}
@@ -278,8 +278,9 @@ export default function SpecialDetailsScreen() {
             </Card>
           );
         })}
+      </Section>
 
-        <SectionHeader title="المصروفات المرتبطة" />
+      <Section title="المصروفات المرتبطة">
         {!loading && expenses.length === 0 ? (
           <EmptyState message="لا توجد مصروفات مرتبطة بهذا التحصيل." />
         ) : null}
@@ -294,10 +295,10 @@ export default function SpecialDetailsScreen() {
             </View>
           </Card>
         ))}
-        {collection?.active ? (
-          <BigButton title="إغلاق التحصيل" variant="secondary" onPress={() => setPendingClose(true)} />
-        ) : null}
-      </ScrollView>
+      </Section>
+      {collection?.active ? (
+        <BigButton title="إغلاق التحصيل" variant="secondary" onPress={() => setPendingClose(true)} />
+      ) : null}
 
       <AppBottomSheet
         visible={editTarget !== null}
@@ -358,20 +359,11 @@ export default function SpecialDetailsScreen() {
         onConfirm={() => void closeCollection()}
         onCancel={() => setPendingClose(false)}
       />
-    </>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    padding: theme.spacingScale.screen,
-    paddingTop: theme.spacingScale.md,
-    paddingBottom: theme.spacingScale.lg,
-    gap: theme.spacingScale.sm,
-    backgroundColor: theme.colors.background,
-    writingDirection: 'rtl',
-  },
   back: {
     minHeight: theme.sizes.touchCompact,
     alignSelf: 'flex-start',
@@ -384,7 +376,7 @@ const styles = StyleSheet.create({
   },
   summaryRow: {
     flexDirection: 'row',
-    gap: theme.spacingScale.xs,
+    gap: theme.spacingScale.cardGap,
   },
   summaryCard: {
     flex: 1,
